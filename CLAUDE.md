@@ -1,0 +1,84 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Project Overview
+
+ローカル LLM 推論（GPU ワークステーション上の llama.cpp）を使った agentic system の学習・PoC リポジトリ。フレームワーク非依存で、エージェントアーキテクチャの各概念を段階的に構築する。
+
+## Hardware / Infrastructure
+
+- **GPU WS**: RTX PRO 4500 Blackwell (32GB GDDR7), Ubuntu 24.04, CUDA 13.2
+- **Client**: Mac (M4 Pro/M4, 24GB), macOS
+- **LLM**: Qwen3.5 35B（llama.cpp サーバー経由、OpenAI 互換 API）
+- **Domain Tool**: e-Gov 法令 API (V1)
+
+## Development Setup
+
+```bash
+# Python 環境（uv 使用）
+uv init
+uv add httpx pydantic
+```
+
+## LLM Inference Server
+
+llama-server は GPU WS 上で稼働。Mac からは OpenAI 互換 API として接続する。
+
+```bash
+# GPU WS 側: llama-server 起動例
+llama-server \
+  -m <model.gguf> \
+  --host 0.0.0.0 --port 8080 \
+  -ngl 99 -c 8192 --jinja -fa
+```
+
+- `--jinja` は Stage 2 以降の tool calling に**必須**
+- `-c 8192`: 32GB VRAM でモデル(~20GB)ロード後、KVキャッシュに使える残量から 8192〜16384 が現実的
+- API エンドポイント: `http://<GPU-WS-IP>:8080/v1/chat/completions`
+
+### Qwen3.5 + llama.cpp の注意点
+
+- llama.cpp **b8149 以降**が必要（`qwen35moe` アーキテクチャサポート）
+- 公式 chat_template.jinja に tool calling バグあり。コミュニティ修正版テンプレート（barubary/qwen3.5-barubary-attuned-chat-template）または Unsloth 版 GGUF を推奨
+- "Uncensored" 派生モデルは tool calling の学習分布からずれる可能性あり。学習目的では公式 instruct 版を推奨
+- llama.cpp の function calling ドキュメントで Qwen3.5 はネイティブサポート外（Qwen 2.5 まで）。Generic フォーマットハンドラにフォールバックする場合あり
+
+## e-Gov 法令 API（ドメインツール）
+
+認証不要・無料の公開 API。本プロジェクトでは V1（XML 形式）を使用。
+
+- 法令一覧取得: `GET https://laws.e-gov.go.jp/api/1/lawlists/{法令種別}`
+  - 1=全法令, 2=憲法・法律, 3=政令・勅令, 4=府省令・規則
+- 法令本文取得: `GET https://laws.e-gov.go.jp/api/1/lawdata/{法令番号又は法令ID}`
+
+## Architecture & Stages
+
+段階的学習アプローチ。各ステージが1つのアーキテクチャ概念に対応:
+
+- **Stage 0**: 推論 API 接続・ベースライン検証
+- **Stage 1**: Structured Output（法令 XML から条文情報抽出）
+- **Stage 2**: Single Tool Calling（ReAct パターン、e-Gov API 検索）
+- **Stage 3**: 複数ツール + ルーティング
+- **Stage 4**: 状態管理・会話履歴
+- **Stage 5**: 計画と分解
+- **Stage 6**: 自己評価・修正ループ
+- **Stage 7**: 研究タスク応用
+
+詳細な実装手順は `docs/agentic-system-learning-guide.md` を参照。
+
+## Language Strategy
+
+- **Stage 0–2**: Python（学習フェーズ、コミュニティリソース活用）
+  - httpx, pydantic 使用。LangChain 等のフレームワーク不使用
+- **Stage 3+**: Scala 3 への移行を予定
+  - sttp (HTTP), circe (JSON), cats-effect (非同期 IO)
+  - ADT + パターンマッチでメッセージ型・ツール定義を型安全にモデリング
+
+## Key Design Decisions
+
+- **バックエンド切替必須**: OpenAI API とローカル LLM（llama.cpp）を切り替え可能にすること。両者とも OpenAI 互換 API なので、base URL・API key・モデル名の差し替えで対応する。大学では GPU WS に接続可能だが、自宅からは不可のため、自宅開発時は OpenAI API を使用する
+- **フレームワーク不使用**: LLM エージェントの内部構造を理解することが目的。LangChain 等の抽象化に隠れる概念を自分の手で実装する
+- **ボトルネック**: LLM 推論（500ms〜数秒）が支配的。言語ランタイムの速度差は無視できる
+- **JVM コスト**: 起動時のみ。定常状態の HTTP 性能は Go/Rust と同等
+- **Rust/Go 不採用理由**: Rust は所有権モデルが JSON 変換と相性悪く、コンパイル時間がプロンプト反復に不向き。Go は型システムが弱い（ADT なし）

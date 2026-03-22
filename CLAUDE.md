@@ -82,3 +82,19 @@ llama-server \
 - **ボトルネック**: LLM 推論（500ms〜数秒）が支配的。言語ランタイムの速度差は無視できる
 - **JVM コスト**: 起動時のみ。定常状態の HTTP 性能は Go/Rust と同等
 - **Rust/Go 不採用理由**: Rust は所有権モデルが JSON 変換と相性悪く、コンパイル時間がプロンプト反復に不向き。Go は型システムが弱い（ADT なし）
+
+## Instant Handover (DELETE AFTER READING)
+
+> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-22_session.md` をサブエージェントで参照。
+
+### 本セッションの成果
+- CLAUDE.md 改善（開発セットアップ、llama-server 情報、Qwen3.5 注意点、e-Gov API、バックエンド切替要件）
+- README.md 作成（プロジェクト概要、バックエンド切替方法、ステージ一覧）
+- .gitignore 検証・追加（sessions/, .claude/settings.local.json）
+- .env.example 作成（バックエンド切替用環境変数テンプレート）
+- Initial commit 完了 (`7528b9e`)
+
+### 次のアクション（優先順）
+1. `uv init` でPython環境を構築し、Stage 0 の実装を開始
+2. GPU WS 上の llama.cpp バージョン確認・推論サーバ疎通
+3. モデル選定（公式 Qwen3.5-35B-A3B instruct 版への切替を検討）

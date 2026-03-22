@@ -16,9 +16,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Setup
 
 ```bash
-# Python 環境（uv 使用）
-uv init
-uv add httpx pydantic
+# Scala 環境（scala-cli 使用、Stage 0–2）
+brew install Virtuslab/scala-cli/scala-cli  # 未導入の場合
+# 依存は各 .scala ファイル内の `//> using dep` ディレクティブで管理
 ```
 
 ## LLM Inference Server
@@ -69,9 +69,12 @@ llama-server \
 
 ## Language Strategy
 
-- **Stage 0–2**: Python（学習フェーズ、コミュニティリソース活用）
-  - httpx, pydantic 使用。LangChain 等のフレームワーク不使用
-- **Stage 3+**: Scala 3 への移行を予定
+- **Stage 0–2**: Scala 3 + scala-cli（スクリプト実行、sbt 不要）
+  - sttp (HTTP), circe (JSON) を `//> using dep` で管理
+  - ガイド本文のサンプルコードは Python だが、参考実装として読みつつ Scala で実装する
+  - LangChain 等のフレームワーク不使用
+- **Stage 3+**: Scala 3 + sbt プロジェクト
+  - 複数ファイル・テスト・ビルド管理が必要になる段階で移行
   - sttp (HTTP), circe (JSON), cats-effect (非同期 IO)
   - ADT + パターンマッチでメッセージ型・ツール定義を型安全にモデリング
 
@@ -95,6 +98,6 @@ llama-server \
 - Initial commit 完了 (`7528b9e`)
 
 ### 次のアクション（優先順）
-1. `uv init` でPython環境を構築し、Stage 0 の実装を開始
+1. scala-cli の導入確認、Stage 0 の実装を開始（Scala）
 2. GPU WS 上の llama.cpp バージョン確認・推論サーバ疎通
 3. モデル選定（公式 Qwen3.5-35B-A3B instruct 版への切替を検討）

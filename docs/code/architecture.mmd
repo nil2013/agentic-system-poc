@@ -1,0 +1,49 @@
+graph TB
+    subgraph LLM["LLM (Qwen3.5-35B-A3B / 9B)"]
+        API["OpenAI 互換 Chat Completions API"]
+    end
+
+    subgraph Agent["Agent Layer"]
+        AL["AgentLoop<br/><i>ReAct ループ</i>"]
+        CS["ConversationState<br/><i>セッション永続化</i>"]
+        CL["ConversationLogger<br/><i>会話ログ記録</i>"]
+    end
+
+    subgraph Tools["Tool Layer"]
+        TD["ToolDispatch<br/><i>ツール定義 + ディスパッチ</i>"]
+        FL["find_laws"]
+        GA["get_article"]
+        CALC["calculate"]
+    end
+
+    subgraph Domain["Domain Layer (tools.egov)"]
+        LR["LawRepository<br/><i>法令一覧キャッシュ<br/>名前解決</i>"]
+        AR["ArticleRepository<br/><i>条文取得 + XML パース</i>"]
+        ANC["ArticleNumberConverter<br/><i>709 → 第七百九条</i>"]
+    end
+
+    subgraph External["External"]
+        EGOV["EGovApiClient<br/><i>e-Gov 法令 API V1</i>"]
+        ARITH["Arithmetic<br/><i>四則演算パーサ</i>"]
+    end
+
+    API <-->|"HTTP JSON"| AL
+    AL --> CS
+    AL --> CL
+    AL -->|"tool_calls"| TD
+    TD --> FL
+    TD --> GA
+    TD --> CALC
+    FL --> LR
+    GA --> LR
+    GA --> AR
+    AR --> ANC
+    CALC --> ARITH
+    LR -->|"/lawlists"| EGOV
+    AR -->|"/articles"| EGOV
+
+    style LLM fill:#e8f4fd,stroke:#2563eb
+    style Agent fill:#f0fdf4,stroke:#16a34a
+    style Tools fill:#fefce8,stroke:#ca8a04
+    style Domain fill:#fdf2f8,stroke:#db2777
+    style External fill:#f5f5f5,stroke:#666

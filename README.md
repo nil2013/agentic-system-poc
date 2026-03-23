@@ -123,7 +123,7 @@ src/main/scala/
 
 ## ドキュメント
 
-- **コードドキュメント**: [`docs/code/index.html`](docs/code/index.html) — アーキテクチャ解説 + Usage ガイド
+- **コードドキュメント**: [`docs/code/README.md`](docs/code/README.md) — Scala 実装のアーキテクチャ解説 + Usage ガイド（[HTML版](docs/code/index.html)）
 - **API リファレンス**: `sbt doc` → `target/scala-3.6.4/api/index.html`
 - **学習ガイド**: [`docs/guide/agentic-system-learning-guide-scala.md`](docs/guide/agentic-system-learning-guide-scala.md)
 - **e-Gov API 設計書**: [`docs/egov-api/egov-law-client-design.md`](docs/egov-api/egov-law-client-design.md)

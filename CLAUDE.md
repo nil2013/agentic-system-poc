@@ -10,7 +10,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **GPU WS**: RTX PRO 4500 Blackwell (32GB GDDR7), Ubuntu 24.04, CUDA 13.2
 - **Client**: Mac (M4 Pro/M4, 24GB), macOS
-- **LLM**: Qwen3.5 35B（llama.cpp サーバー経由、OpenAI 互換 API）
+- **LLM（大学）**: Qwen3.5-35B-A3B MoE（llama.cpp サーバー経由、OpenAI 互換 API）
+- **LLM（自宅）**: Qwen3.5-9B dense 8-bit（mlx-lm サーバー経由、OpenAI 互換 API）。詳細は `docs/research/2026-03-23_qwen35-9b-quantization-strategy.md` 参照
+- **LLM（fallback）**: OpenAI API（gpt-4o 等）
 - **Domain Tool**: e-Gov 法令 API (V1)
 
 ## Development Setup
@@ -23,7 +25,9 @@ brew install Virtuslab/scala-cli/scala-cli  # 未導入の場合
 
 ## LLM Inference Server
 
-llama-server は GPU WS 上で稼働。Mac からは OpenAI 互換 API として接続する。
+すべてのバックエンドは OpenAI 互換 API を提供する。クライアントコードは `LLM_BASE_URL` の差し替えだけで切り替え可能。
+
+### 大学: llama-server (GPU WS)
 
 ```bash
 # GPU WS 側: llama-server 起動例
@@ -36,6 +40,17 @@ llama-server \
 - `--jinja` は Stage 2 以降の tool calling に**必須**
 - `-c 8192`: 32GB VRAM でモデル(~20GB)ロード後、KVキャッシュに使える残量から 8192〜16384 が現実的
 - API エンドポイント: `http://<GPU-WS-IP>:8080/v1/chat/completions`
+
+### 自宅: mlx-lm (Mac ローカル)
+
+```bash
+# Mac 側: mlx-lm サーバー起動例
+mlx_lm.server --model mlx-community/Qwen3.5-9B-MLX-8bit --port 8000
+```
+
+- mlx-lm 本体に tool calling サポートがマージ済み（PR #217, 2025-06-26）
+- より安定した tool calling が必要な場合は `mlx-openai-server`（`--tool-call-parser qwen3_5`）も選択肢
+- API エンドポイント: `http://localhost:8000/v1/chat/completions`
 
 ### Qwen3.5 + llama.cpp の注意点
 
@@ -65,7 +80,8 @@ llama-server \
 - **Stage 6**: 自己評価・修正ループ
 - **Stage 7**: 研究タスク応用
 
-詳細な実装手順は `docs/agentic-system-learning-guide.md` を参照。
+詳細な実装手順は `docs/agentic-system-learning-guide-scala.md`（メイン）を参照。
+Python 版の `docs/agentic-system-learning-guide.md` は参考資料として残す。
 
 ## Language Strategy
 
@@ -78,9 +94,24 @@ llama-server \
   - sttp (HTTP), circe (JSON), cats-effect (非同期 IO)
   - ADT + パターンマッチでメッセージ型・ツール定義を型安全にモデリング
 
+## Working Directory Structure
+
+各ステージの作業はステージごとのディレクトリで行う:
+
+```
+stages/
+├── stage0/    # 推論 API 疎通・レイテンシ計測
+├── stage1/    # 構造化出力
+├── stage2/    # 単一ツール呼び出し
+├── stage3/    # 複数ツール + ルーティング
+├── stage4/    # 状態管理・会話履歴
+├── stage5/    # 計画と分解
+└── stage6/    # 自己評価・修正ループ
+```
+
 ## Key Design Decisions
 
-- **バックエンド切替必須**: OpenAI API とローカル LLM（llama.cpp）を切り替え可能にすること。両者とも OpenAI 互換 API なので、base URL・API key・モデル名の差し替えで対応する。大学では GPU WS に接続可能だが、自宅からは不可のため、自宅開発時は OpenAI API を使用する
+- **バックエンド切替必須**: 大学（llama-server on GPU WS）・自宅（mlx-lm on Mac）・fallback（OpenAI API）の3構成を環境変数（`LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`）で切り替え可能にすること
 - **フレームワーク不使用**: LLM エージェントの内部構造を理解することが目的。LangChain 等の抽象化に隠れる概念を自分の手で実装する
 - **ボトルネック**: LLM 推論（500ms〜数秒）が支配的。言語ランタイムの速度差は無視できる
 - **JVM コスト**: 起動時のみ。定常状態の HTTP 性能は Go/Rust と同等

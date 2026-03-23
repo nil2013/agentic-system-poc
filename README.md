@@ -8,27 +8,37 @@
 
 | 役割 | 構成 |
 |------|------|
-| 推論サーバ | GPU WS: RTX PRO 4500 Blackwell (32GB), Ubuntu 24.04, llama.cpp |
-| クライアント | Mac (M4 Pro / M4), macOS |
-| モデル | Qwen3.5 35B（llama.cpp の OpenAI 互換 API 経由） |
+| 推論サーバ（大学） | GPU WS: RTX PRO 4500 Blackwell (32GB), Ubuntu 24.04, llama.cpp |
+| 推論サーバ（自宅） | Mac ローカル: mlx-lm（Apple Silicon ネイティブ） |
+| クライアント | Mac (M4 Pro / M4, 24GB), macOS |
+| モデル（大学） | Qwen3.5-35B-A3B MoE（llama.cpp 経由） |
+| モデル（自宅） | Qwen3.5-9B dense（mlx-lm 経由）。8-bit 量子化 |
 | ドメインツール | e-Gov 法令 API V1（認証不要） |
 
 ### バックエンド切替
 
-OpenAI 互換 API を共通インターフェースとし、ローカル LLM と OpenAI API をバックエンドとして切り替え可能にする（必須要件）。
+OpenAI 互換 API を共通インターフェースとし、3つのバックエンドを環境変数で切り替える（必須要件）。
 
-- **大学**: GPU WS 上の llama.cpp に接続
-- **自宅**: OpenAI API を使用（GPU WS にアクセス不可のため）
+| 環境 | サーバ | モデル |
+|------|--------|--------|
+| **大学** | llama-server (GPU WS) | Qwen3.5-35B-A3B |
+| **自宅** | mlx-lm (Mac ローカル) | Qwen3.5-9B |
+| **fallback** | OpenAI API | gpt-4o 等 |
 
 切替は環境変数（`.env`）で行う:
 
 ```bash
-# ローカル LLM（大学）
+# 大学: llama-server (GPU WS)
 LLM_BASE_URL=http://<GPU-WS-IP>:8080/v1
 LLM_API_KEY=dummy
 LLM_MODEL=local
 
-# OpenAI API（自宅）
+# 自宅: mlx-lm (Mac ローカル)
+LLM_BASE_URL=http://localhost:8000/v1
+LLM_API_KEY=dummy
+LLM_MODEL=mlx-community/Qwen3.5-9B-MLX-8bit
+
+# fallback: OpenAI API
 LLM_BASE_URL=https://api.openai.com/v1
 LLM_API_KEY=sk-...
 LLM_MODEL=gpt-4o
@@ -37,8 +47,8 @@ LLM_MODEL=gpt-4o
 ## セットアップ
 
 ```bash
-uv init
-uv add httpx pydantic
+# scala-cli の導入（未導入の場合）
+brew install Virtuslab/scala-cli/scala-cli
 
 # .env を作成して環境に応じたバックエンド設定を記入
 cp .env.example .env
@@ -59,21 +69,25 @@ cp .env.example .env
 | 6 | 自己評価・修正ループ | 評価プロンプト + 再生成 |
 | 7 | 研究タスク応用 | 法学ドメイン向け統合 |
 
-詳細な実装手順は [`docs/agentic-system-learning-guide.md`](docs/agentic-system-learning-guide.md) を参照。
+詳細な実装手順は [`docs/agentic-system-learning-guide-scala.md`](docs/agentic-system-learning-guide-scala.md) を参照。
+Python 版ガイド（[`docs/agentic-system-learning-guide.md`](docs/agentic-system-learning-guide.md)）は参考資料として残す。
 
 ## 言語戦略
 
-- **Stage 0–2**: Python（httpx, pydantic）— 学習フェーズ、コミュニティリソース活用
-- **Stage 3+**: Scala 3 への移行を予定 — ADT + パターンマッチによる型安全なモデリング
+- **Stage 0–2**: Scala 3 + scala-cli — sbt 不要、`//> using dep` でスクリプト即時実行
+- **Stage 3+**: Scala 3 + sbt プロジェクト — ADT + パターンマッチによる型安全なモデリング
 
-## ディレクトリ構成（予定）
+## ディレクトリ構成
 
 ```
 .
 ├── docs/                # 設計文書・学習ガイド
-├── tools/               # ツール実装（Stage 2+）
+├── stages/              # ステージごとの作業ディレクトリ
+│   ├── stage0/          # 推論 API 疎通・レイテンシ計測
+│   ├── stage1/          # 構造化出力
+│   ├── stage2/          # 単一ツール呼び出し
+│   └── ...
 ├── sessions/            # 会話セッションデータ（Stage 4+、gitignore対象）
 ├── .env.example         # 環境変数テンプレート
-├── .env                 # 環境変数（gitignore対象）
-└── stage*_.py           # 各ステージの実装スクリプト
+└── .env                 # 環境変数（gitignore対象）
 ```

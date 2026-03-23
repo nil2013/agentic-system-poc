@@ -123,16 +123,27 @@ stages/
 
 ## Instant Handover (DELETE AFTER READING)
 
-> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-22_session.md` をサブエージェントで参照。
+> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-23_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- CLAUDE.md 改善（開発セットアップ、llama-server 情報、Qwen3.5 注意点、e-Gov API、バックエンド切替要件）
-- README.md 作成（プロジェクト概要、バックエンド切替方法、ステージ一覧）
-- .gitignore 検証・追加（sessions/, .claude/settings.local.json）
-- .env.example 作成（バックエンド切替用環境変数テンプレート）
-- Initial commit 完了 (`7528b9e`)
+- Stage 0-2 完了（推論疎通 → 構造化出力 → 単一ツール呼び出し）
+- mlx-lm バックエンド追加、量子化戦略調査（8-bit 採用）
+- GPU WS: Q4_K_M 採用、nvidia-smi 実測データ取得
+- Stage 実行プロトコル策定（`stages/PROTOCOL.md`）
+- ガイド修正（thinking mode, ground truth, circe バージョン, -fa on）
+
+### 主な知見
+- Qwen3.5-35B-A3B の tool calling は非常に安定（パスA 5/5、parallel calling 動作）
+- 構造化出力は全手法100%（ガイドの予想 80-90% を大幅に上回る）
+- Thinking mode が max_tokens を消費する問題 → 4096 に引き上げて対処
+- `/no_think` は llama-server 経由で効かない
 
 ### 次のアクション（優先順）
-1. scala-cli の導入確認、Stage 0 の実装を開始（Scala）
-2. GPU WS 上の llama.cpp バージョン確認・推論サーバ疎通
-3. モデル選定（公式 Qwen3.5-35B-A3B instruct 版への切替を検討）
+1. Stage 3（複数ツール + ルーティング）の実施
+2. Q6_K vs Q4_K_M 精度比較（Stage 1-2 テストケース使用）
+3. Thinking mode 制御方法の調査
+
+### 運用上の注意
+- llama-server は `--jinja -fa on` で起動すること
+- `max_tokens` は 4096 以上を指定すること（thinking mode 対策）
+- mmproj なしで VRAM ~21.7GB（Q4_K_M）。mmproj ありだと ~28GB

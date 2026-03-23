@@ -113,6 +113,18 @@ stages/
 
 各ステージの実行手順・RESULTS.md のフォーマット・ガイド修正ポリシー等は `stages/PROTOCOL.md` を参照。
 
+### コード構成（sbt プロジェクト, Stage 4+）
+
+```
+src/main/scala/
+├── messages/     # ChatMessage ADT, JSON codecs
+├── tools/        # StatuteSearch, LawListSearch, Arithmetic, ToolDispatch
+├── agent/        # AgentLoop, ConversationState
+└── stages/       # Stage ごとのエントリポイント (main)
+```
+
+Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残る。
+
 ## Key Design Decisions
 
 - **バックエンド切替必須**: 大学（llama-server on GPU WS）・自宅（mlx-lm on Mac）・fallback（OpenAI API）の3構成を環境変数（`LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`）で切り替え可能にすること

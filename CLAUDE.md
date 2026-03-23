@@ -126,22 +126,22 @@ stages/
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-23_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- Stage 0-2 完了（推論疎通 → 構造化出力 → 単一ツール呼び出し）
+- **Stage 0-3 完了**（推論疎通 → 構造化出力 → 単一ツール呼び出し → 複数ツール+ルーティング）
 - mlx-lm バックエンド追加、量子化戦略調査（8-bit 採用）
 - GPU WS: Q4_K_M 採用、nvidia-smi 実測データ取得
 - Stage 実行プロトコル策定（`stages/PROTOCOL.md`）
 - ガイド修正（thinking mode, ground truth, circe バージョン, -fa on）
 
 ### 主な知見
-- Qwen3.5-35B-A3B の tool calling は非常に安定（パスA 5/5、parallel calling 動作）
-- 構造化出力は全手法100%（ガイドの予想 80-90% を大幅に上回る）
+- **Stage 1-3 で一貫した天井効果**: 構造化出力100%、tool calling 5/5、ルーティング6/6。Qwen3.5-35B-A3B のモデル能力がタスク難易度を大幅に超えている
 - Thinking mode が max_tokens を消費する問題 → 4096 に引き上げて対処
 - `/no_think` は llama-server 経由で効かない
+- パスA（OpenAI互換 tool calling）が安定動作。parallel calling も可能
 
 ### 次のアクション（優先順）
-1. Stage 3（複数ツール + ルーティング）の実施
-2. Q6_K vs Q4_K_M 精度比較（Stage 1-2 テストケース使用）
-3. Thinking mode 制御方法の調査
+1. Stage 4（状態管理・会話履歴）の実施
+2. ADT 化は sbt 移行時に実施
+3. Q6_K vs Q4_K_M 精度比較（天井効果により難しいタスクで検証する方が有効か検討）
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

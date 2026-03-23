@@ -56,8 +56,8 @@ scala-cli version
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19
-//> using dep io.circe::circe-generic:0.14.10
-//> using dep io.circe::circe-parser:0.14.10
+//> using dep io.circe::circe-generic:0.14.15
+//> using dep io.circe::circe-parser:0.14.15
 ```
 
 この4行で、HTTPクライアント（sttp）+ JSON encode/decode（circe）+ case classの自動導出が揃う。
@@ -128,7 +128,7 @@ cmake --build build --config Release -j$(nproc)
 - `-ngl 99`: 全レイヤをGPUにオフロード
 - `-c 8192`: コンテキスト長を8192トークンに制限（VRAM節約。後で拡大可能）
 - `--jinja`: Jinjaテンプレートエンジンを有効化（Stage 2以降のtool callingに必須）
-- `-fa`: Flash Attention有効化（メモリ効率向上）
+- `-fa on`: Flash Attention有効化（メモリ効率向上。`on`/`off`/`auto` から選択）
 
 **起動時のログで確認すべき項目:**
 
@@ -155,8 +155,8 @@ curl http://<GPGPU-WS-IP>:8080/v1/chat/completions \
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19
-//> using dep io.circe::circe-generic:0.14.10
-//> using dep io.circe::circe-parser:0.14.10
+//> using dep io.circe::circe-generic:0.14.15
+//> using dep io.circe::circe-parser:0.14.15
 
 import sttp.client4.*
 import sttp.client4.circe.*
@@ -271,8 +271,8 @@ curl -s "https://laws.e-gov.go.jp/api/1/lawdata/129AC0000000089" > civil_code.xm
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19
-//> using dep io.circe::circe-generic:0.14.10
-//> using dep io.circe::circe-parser:0.14.10
+//> using dep io.circe::circe-generic:0.14.15
+//> using dep io.circe::circe-parser:0.14.15
 
 import sttp.client4.*
 import sttp.client4.circe.*
@@ -608,8 +608,8 @@ object StatuteSearch {
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19
-//> using dep io.circe::circe-generic:0.14.10
-//> using dep io.circe::circe-parser:0.14.10
+//> using dep io.circe::circe-generic:0.14.15
+//> using dep io.circe::circe-parser:0.14.15
 //> using dep org.scala-lang.modules::scala-xml:2.3.0
 
 import sttp.client4.*
@@ -1237,6 +1237,8 @@ scala-cli export --sbt stage3_routing.scala
 | `Unknown filter 'items'` エラー | Jinjaテンプレートのバグ | コミュニティ修正版テンプレートを `--chat-template-file` で指定 |
 | ツールを呼ぶべき質問でテキスト回答が返る | Genericフォーマットの制限 | パスB（プロンプトベース）にフォールバック |
 | 引数のJSONが壊れる | モデルの出力品質 | 公式instruct版GGUFに切り替え。temperature=0.0を確認 |
+| HTTP 500: `type must be string, but is null` | リクエスト JSON の `content` が `null` | `Message.content` を `Option[String]` ではなく `String` にする。リクエスト用とレスポンス用で型を分離するのが安全 |
+| `content` が空で `reasoning_content` のみ返る | Qwen3.5 の thinking mode がデフォルト有効 | `max_tokens` を十分大きくする。または thinking を無効化（`/no_think` タグ等） |
 
 ### A.3 scala-cli関連
 

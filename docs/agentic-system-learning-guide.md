@@ -112,7 +112,7 @@ cmake --build build --config Release -j$(nproc)
 - `-ngl 99`: 全レイヤをGPUにオフロード
 - `-c 8192`: コンテキスト長を8192トークンに制限（VRAM節約。後で拡大可能）
 - `--jinja`: Jinjaテンプレートエンジンを有効化（Stage 2以降のtool callingに必須）
-- `-fa`: Flash Attention有効化（メモリ効率向上）
+- `-fa on`: Flash Attention有効化（メモリ効率向上。`on`/`off`/`auto` から選択）
 
 **起動時のログで確認すべき項目:**
 

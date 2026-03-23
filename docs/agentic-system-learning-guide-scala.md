@@ -850,6 +850,8 @@ def runAgentPromptBased(userQuery: String): String = {
 
 Stage 2の `search_statute` に加えて、以下のツールを追加する。
 
+> **実装上の注意（実験時の追記）:** Stage 2 の `searchStatute` は `KnownLaws`（ハードコード6法）で法令名→法令IDを解決していたが、`findLawByKeyword` は e-Gov API の全法令リストから動的に検索する。Stage 5 のタスク設計は `findLawByKeyword` の結果を `searchStatute` に渡すパイプラインが動くことを前提としているため、**このステージで `searchStatute` を全法令に対応するよう拡張する必要がある**。具体的には、`findLawByKeyword` が取得する法令一覧キャッシュ（法令名→法令ID）を `searchStatute` でも利用し、`KnownLaws` にない法令もIDで動的解決できるようにする。
+
 ```scala
 //> using dep org.scala-lang.modules::scala-xml:2.3.0
 
@@ -1066,6 +1068,7 @@ class ConversationState(sessionId: String) {
 良い題材:
   「個人情報に関する法律を探し、その法律の第1条の条文を取得してください」
   → findLawByKeyword("個人情報") → searchStatute で第1条を取得
+  ※ このタスクは searchStatute が全法令に対応していることが前提。Stage 3 での拡張（§3.1 注記参照）が必要。
 
 悪い題材:
   「民法709条の要件を列挙し、各要件について判例を1件ずつ検索せよ」
@@ -1307,3 +1310,4 @@ Stage 0 (疎通・基盤)
 | 2026-03-23 | §A.2 トラブルシューティングに `content:null` / thinking mode 問題を追記 | Stage 0-1 実験で遭遇 |
 | 2026-03-23 | §0.3 に Qwen3.5 thinking mode の注意点を追記 | Stage 1 で `max_tokens=1024` だと content が空になる問題 |
 | 2026-03-23 | §1.7 GroundTruth の caption を括弧付きに修正 + 設計注意点を追記 | Stage 1 実験で ground truth 側のバグが判明 |
+| 2026-03-23 | §3.1 に searchStatute 全法令対応の注記を追記、§5.1 に前提条件の注記を追記 | Stage 4 実験で findLawByKeyword → searchStatute パイプラインの断絶が判明。ガイドの Stage 5 タスク設計が動かない |

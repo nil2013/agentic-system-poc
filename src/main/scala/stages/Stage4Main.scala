@@ -2,6 +2,7 @@ package stages
 
 import agent.*
 import messages.*
+import java.nio.file.Paths
 
 /** Stage 4: 複数ターン対話 + コンテキスト管理の体験 */
 object Stage4Main {
@@ -30,42 +31,63 @@ object Stage4Main {
     val state = new ConversationState("stage4-test")
     state.add(ChatMessage.System(config.systemPrompt))
 
+    val logger = new ConversationLogger(Paths.get("stages/stage4/conversation-log.md"))
+    logger.header("Stage 4: Multi-turn Conversation Log", config)
+
     for ((query, i) <- queries.zipWithIndex) {
       val turnNum = i + 1
       println(s"--- Turn $turnNum: ${query.take(40)} ---")
 
       // ユーザーメッセージ追加
       state.add(ChatMessage.User(query))
+      logger.turnStart(turnNum, query)
 
       // エージェント実行
       val (result, updatedMessages) = AgentLoop.runTurn(state.messages, config)
 
-      // 状態を更新（AgentLoop が返した全メッセージで上書き）
-      // ただし ConversationState は差分追加の方が効率的なので、
-      // エージェントが追加した分（assistant + tool results）だけ追加
+      // ツール呼び出しログを記録
       val newMessages = updatedMessages.drop(state.messageCount)
+      // ToolResult と対応する tool call を紐付けて記録
+      var toolCallIdx = 0
+      for (msg <- newMessages) {
+        msg match {
+          case ChatMessage.ToolResult(_, content) =>
+            val callLog = result.toolCalls.lift(toolCallIdx).getOrElse("unknown")
+            val name = callLog.takeWhile(_ != '(')
+            val args = callLog.drop(name.length)
+            logger.toolCall(toolCallIdx, name, args, content)
+            toolCallIdx += 1
+          case _ => ()
+        }
+      }
+
       state.addAll(newMessages)
 
-      // 推移ログ
-      val estTokens = state.estimateTokens
-      val msgCount = state.messageCount
-      println(s"  Answer: ${result.response.content.getOrElse("(empty)").take(150).replace("\n", " ")}")
+      // ログ記録
+      val answer = result.response.content.getOrElse("(empty)")
+      logger.assistantResponse(answer, result.totalTokens, state.estimateTokens, state.messageCount)
+
+      // stdout
+      println(s"  Answer: ${answer.take(150).replace("\n", " ")}")
       println(s"  Tool calls: ${result.toolCalls.mkString(", ").take(80)}")
       println(s"  API tokens this turn: ${result.totalTokens}")
-      println(s"  State: $msgCount messages, ~$estTokens est. chars")
+      println(s"  State: ${state.messageCount} messages, ~${state.estimateTokens} est. chars")
       println()
 
-      // セッション保存
       state.save()
     }
 
     // サマリー
+    logger.summary(state.messageCount, state.estimateTokens)
+    logger.save()
+
     println("=" * 60)
     println("CONTEXT GROWTH SUMMARY")
     println("=" * 60)
     println(s"  Total messages: ${state.messageCount}")
     println(s"  Estimated chars: ${state.estimateTokens}")
     println(s"  Session saved to: sessions/stage4-test.json")
+    println(s"  Conversation log: stages/stage4/conversation-log.md")
 
     // truncation テスト
     println()

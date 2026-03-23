@@ -3,7 +3,7 @@
 > 実施日: 2026-03-23
 > 環境: Mac Studio (M4 Pro) → GPU WS (RTX PRO 4500 Blackwell)
 > モデル: Qwen3.5-35B-A3B-Q4_K_M (llama-server, --jinja -fa on)
-> ガイド参照: `docs/agentic-system-learning-guide-scala.md` §3.1–§3.4
+> ガイド参照: `docs/guide/agentic-system-learning-guide-scala.md` §3.1–§3.4
 > 実験ノート: [`NOTES.md`](NOTES.md)
 
 ---

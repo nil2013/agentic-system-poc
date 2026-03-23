@@ -80,8 +80,8 @@ mlx_lm.server --model mlx-community/Qwen3.5-9B-MLX-8bit --port 8000
 - **Stage 6**: 自己評価・修正ループ
 - **Stage 7**: 研究タスク応用
 
-詳細な実装手順は `docs/agentic-system-learning-guide-scala.md`（メイン）を参照。
-Python 版の `docs/agentic-system-learning-guide.md` は参考資料として残す。
+詳細な実装手順は `docs/guide/agentic-system-learning-guide-scala.md`（メイン）を参照。
+Python 版の `docs/guide/agentic-system-learning-guide.md` は参考資料として残す。
 
 ## Language Strategy
 

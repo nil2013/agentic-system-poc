@@ -8,7 +8,7 @@
 
 ### 1.1 ガイド確認
 
-- `docs/agentic-system-learning-guide-scala.md` の該当セクションを通読する
+- `docs/guide/agentic-system-learning-guide-scala.md` の該当セクションを通読する
 - 予定作業・仮説（ガイドの予想）・成果物を把握する
 
 ### 1.2 ディレクトリ作成
@@ -27,7 +27,7 @@ IMRaD 形式で骨格を作成する。**実験実行前に** Introduction と M
 > 実施日: YYYY-MM-DD
 > 環境: [端末] → [推論サーバー構成]
 > モデル: [モデル名・量子化]
-> ガイド参照: `docs/agentic-system-learning-guide-scala.md` §X.X–§X.X
+> ガイド参照: `docs/guide/agentic-system-learning-guide-scala.md` §X.X–§X.X
 > 実験ノート: [`NOTES.md`](NOTES.md)
 
 ## 1. Introduction

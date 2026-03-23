@@ -69,8 +69,8 @@ cp .env.example .env
 | 6 | 自己評価・修正ループ | 評価プロンプト + 再生成 |
 | 7 | 研究タスク応用 | 法学ドメイン向け統合 |
 
-詳細な実装手順は [`docs/agentic-system-learning-guide-scala.md`](docs/agentic-system-learning-guide-scala.md) を参照。
-Python 版ガイド（[`docs/agentic-system-learning-guide.md`](docs/agentic-system-learning-guide.md)）は参考資料として残す。
+詳細な実装手順は [`docs/guide/agentic-system-learning-guide-scala.md`](docs/guide/agentic-system-learning-guide-scala.md) を参照。
+Python 版ガイド（[`docs/guide/agentic-system-learning-guide.md`](docs/guide/agentic-system-learning-guide.md)）は参考資料として残す。
 
 ## 言語戦略
 

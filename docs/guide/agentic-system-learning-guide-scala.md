@@ -1301,7 +1301,7 @@ Stage 0 (疎通・基盤)
 
 ## 修正履歴
 
-本ガイドは実験結果に基づき随時修正される。各修正のコミット履歴は `git log -- docs/agentic-system-learning-guide-scala.md` で確認可能。
+本ガイドは実験結果に基づき随時修正される。各修正のコミット履歴は `git log --follow -- docs/guide/agentic-system-learning-guide-scala.md` で確認可能。
 
 | 日付 | 修正内容 | 契機 |
 |------|---------|------|

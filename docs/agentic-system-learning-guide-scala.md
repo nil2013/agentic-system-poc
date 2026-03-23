@@ -35,6 +35,8 @@
 
 5. **コンテキストウィンドウの実効制限**: Qwen3.5-35B-A3Bは262Kトークンのコンテキストをサポートするが、32GB VRAMに~20GBのモデルを載せると残り~12GBがKVキャッシュに使える。MoEモデルは全expertの重みがVRAMに常駐するため、実効コンテキストは数千〜数万トークン程度と見積もるべきである。llama-serverの `-c` パラメータで明示的に制限する（推奨: 8192〜16384から開始）。
 
+6. **Qwen3.5 の Thinking Mode（実験時の追記）**: Qwen3.5 はデフォルトで thinking mode が有効であり、レスポンスの `reasoning_content` フィールドに思考過程を出力する。thinking は ~1500-2000 tokens を消費するため、`max_tokens` が不足すると `content`（実際の回答）が空になる。構造化出力や tool calling を行う場合は `max_tokens` を十分大きく設定すること（4096 以上を推奨）。なお、llama-server 経由での `/no_think` による thinking 無効化は動作しない場合がある（2026-03-23 時点で確認）。
+
 **→ Stage 0の最初のタスクとして、これらの前提条件の検証を行う。**
 
 ### 0.4 言語とツールチェーン
@@ -474,10 +476,12 @@ def experimentC(): Unit = {
 
 ground truthは入力XMLから機械的に導出できる。
 
+> **注意（実験時の教訓）:** XML テキストのフォーマット（括弧、空白等）をそのまま反映すること。例えば `ArticleCaption` のテキストは `（不法行為による損害賠償）` と括弧付きで格納されている。Ground truth で括弧を除去すると、モデルの正しい抽出が「不一致」と誤判定される。機械的に導出した ground truth であっても、初期にサンプル目視確認を行うべきである。
+
 ```scala
 val GroundTruth = ArticleInfo(
   article_number = "709",
-  caption = "不法行為による損害賠償",
+  caption = "（不法行為による損害賠償）",  // XML テキストの括弧をそのまま保持
   title = "第七百九条",
   paragraphs = List(
     ParagraphInfo("1", "故意又は過失によって他人の権利又は法律上保護される利益を侵害した者は、これによって生じた損害を賠償する責任を負う。")
@@ -1289,3 +1293,17 @@ Stage 0 (疎通・基盤)
 | 6 | 1日 | evaluatorの設計 |
 
 合計で1-2週間。各ステージの間に振り返りの時間を取ることを推奨する。
+
+---
+
+## 修正履歴
+
+本ガイドは実験結果に基づき随時修正される。各修正のコミット履歴は `git log -- docs/agentic-system-learning-guide-scala.md` で確認可能。
+
+| 日付 | 修正内容 | 契機 |
+|------|---------|------|
+| 2026-03-23 | circe 0.14.10 → 0.14.15（全コードブロック） | scala-cli の outdated 警告 |
+| 2026-03-23 | `-fa` → `-fa on`（コマンド例・パラメータ説明） | 実機で `-fa` 単体が不正な構文と判明 |
+| 2026-03-23 | §A.2 トラブルシューティングに `content:null` / thinking mode 問題を追記 | Stage 0-1 実験で遭遇 |
+| 2026-03-23 | §0.3 に Qwen3.5 thinking mode の注意点を追記 | Stage 1 で `max_tokens=1024` だと content が空になる問題 |
+| 2026-03-23 | §1.7 GroundTruth の caption を括弧付きに修正 + 設計注意点を追記 | Stage 1 実験で ground truth 側のバグが判明 |

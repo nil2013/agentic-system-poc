@@ -31,7 +31,8 @@ object Stage4Main {
     val state = new ConversationState("stage4-test")
     state.add(ChatMessage.System(config.systemPrompt))
 
-    val logger = new ConversationLogger(Paths.get("stages/stage4/conversation-log.md"))
+    val logFile = sys.env.getOrElse("STAGE4_LOG", "stages/stage4/conversation-log.md")
+    val logger = new ConversationLogger(Paths.get(logFile))
     logger.header("Stage 4: Multi-turn Conversation Log", config)
 
     for ((query, i) <- queries.zipWithIndex) {

@@ -78,7 +78,7 @@ mlx_lm.server --model mlx-community/Qwen3.5-9B-MLX-8bit --port 8000
 - **Stage 4**: 状態管理・会話履歴
 - **Stage 5**: 計画と分解
 - **Stage 6**: 自己評価・修正ループ
-- **Stage 7**: 研究タスク応用
+- **Stage 7**: Thinking/Reasoning ブロック分析（方針変更。詳細は `stages/stage7/PLAN.md`）
 
 詳細な実装手順は `docs/guide/agentic-system-learning-guide-scala.md`（メイン）を参照。
 Python 版の `docs/guide/agentic-system-learning-guide.md` は参考資料として残す。

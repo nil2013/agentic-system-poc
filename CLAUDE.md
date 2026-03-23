@@ -138,21 +138,20 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-23_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **Stage 0-3 完了**（推論疎通 → 構造化出力 → 単一ツール呼び出し → 複数ツール+ルーティング）
+- **Stage 0-4 完了**（推論疎通 → 構造化出力 → 単一ツール → 複数ツール → 状態管理）
+- sbt プロジェクト移行 + ChatMessage ADT 化（Stage 4 で実施）
+- ConversationLogger 追加（Stage 4+ で会話ログを自動記録）
 - mlx-lm バックエンド追加、量子化戦略調査（8-bit 採用）
-- GPU WS: Q4_K_M 採用、nvidia-smi 実測データ取得
-- Stage 実行プロトコル策定（`stages/PROTOCOL.md`）
-- ガイド修正（thinking mode, ground truth, circe バージョン, -fa on）
+- Stage 実行プロトコル策定 + 定性的分析方針追加
 
 ### 主な知見
-- **Stage 1-3 で一貫した天井効果**: 構造化出力100%、tool calling 5/5、ルーティング6/6。Qwen3.5-35B-A3B のモデル能力がタスク難易度を大幅に超えている
-- Thinking mode が max_tokens を消費する問題 → 4096 に引き上げて対処
-- `/no_think` は llama-server 経由で効かない
-- パスA（OpenAI互換 tool calling）が安定動作。parallel calling も可能
+- **Stage 1-4 で一貫した天井効果**: ツール選択・構造化出力ともに完璧。品質問題はツールエラー時のフォールバック動作に移行
+- **「静かなフォールバック」**: ツールがエラーを返してもモデルが内部知識で補完する。法学ドメインでは出典偽装リスク。制御が必要
+- Thinking mode が max_tokens を消費 → 4096 に引き上げ。thinking tokens は蓄積しない（好都合）
 
 ### 次のアクション（優先順）
-1. Stage 4（状態管理・会話履歴）の実施
-2. ADT 化は sbt 移行時に実施
+1. Stage 5（計画と分解）の実施
+2. 「静かなフォールバック」の制御（SystemPrompt での試行）
 3. Q6_K vs Q4_K_M 精度比較（天井効果により難しいタスクで検証する方が有効か検討）
 
 ### 運用上の注意

@@ -1,3 +1,6 @@
+// Stage 1: 民法 XML から条文抽出するユーティリティ
+// Run: scala-cli run stages/stage1/extract_articles.scala
+
 //> using scala 3.6
 //> using dep org.scala-lang.modules::scala-xml:2.3.0
 

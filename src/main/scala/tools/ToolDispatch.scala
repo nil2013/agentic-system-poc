@@ -3,9 +3,40 @@ package tools
 import tools.egov.*
 import io.circe.{Json, JsonObject}
 
+/** LLM の Tool Calling と実際のツール実装を橋渡しする中央ディスパッチャ。
+  *
+  * 2つの責務を持つ:
+  *  1. '''`toolDefs`''': OpenAI Chat Completions API の `tools` パラメータとして送信される
+  *     ツールスキーマ JSON。LLM はこの定義を見てツールを選択する。
+  *     '''`description` は事実上プロンプトの一部'''であり、変更は LLM の挙動に直接影響する。
+  *  2. '''`dispatch`''': LLM が返した `tool_calls` を受け取り、対応する実装に振り分ける。
+  *     ツール名文字列がスキーマ定義とディスパッチの結合点。
+  *
+  * == ツール一覧 ==
+  *  - `find_laws`: 法令名キーワード検索 → [[egov.LawRepository.findByKeyword]]
+  *  - `get_article`: 条文取得 → [[egov.LawRepository.resolveLawId]] + [[egov.ArticleRepository.getArticle]]
+  *  - `calculate`: 四則演算 → [[Arithmetic.calculate]]
+  *
+  * == 拡張手順 ==
+  * 新しいツールを追加するには:
+  *  1. `toolDefs` の `Json.arr` にツール定義を追加
+  *  2. `dispatch` の `match` に `case` を追加
+  *  3. ツールの実装を作成（`tools/` または `tools/egov/` パッケージ）
+  *
+  * == 既知の制限 ==
+  *  - `toolDefs` はコンパイル時定数。ランタイムでのツール動的登録は未対応
+  *  - スキーマ JSON は手書き（case class からの自動導出ではない）。PoC では十分
+  *
+  * @see [[agent.AgentLoop]] 本オブジェクトの `toolDefs` と `dispatch` を使用するエージェントループ
+  */
 object ToolDispatch {
 
-  /** OpenAI 互換の tools 定義 JSON */
+  /** OpenAI Chat Completions API の `tools` パラメータとして送信されるツール定義。
+    *
+    * この JSON はリクエストごとに LLM に渡される。LLM はこの定義の `description` と
+    * `parameters` を読んでツールを選択するため、description の書き方はルーティング精度に影響する
+    * （Stage 3 の実験では Qwen3.5-35B-A3B の能力により差は顕在化しなかった）。
+    */
   val toolDefs: Json = Json.arr(
     Json.obj("type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("find_laws"),
@@ -64,6 +95,15 @@ object ToolDispatch {
     ))
   )
 
+  /** ツール呼び出しを実行する。
+    *
+    * @param name ツール名（`toolDefs` の `function.name` と一致する必要がある）
+    * @param args LLM が生成した引数（パース済み `JsonObject`）
+    * @return ツールの実行結果（人間に読みやすいテキスト）。
+    *         '''エラー規約''': エラーメッセージは `"エラー: "` プレフィックスで返される。
+    *         `get_article` のエラーには `find_laws` への誘導メッセージが含まれる
+    *         （LLM が「まず法令を検索して」というフローを学習しやすくするため）。
+    */
   def dispatch(name: String, args: JsonObject): String = {
     name match {
       case "find_laws" =>

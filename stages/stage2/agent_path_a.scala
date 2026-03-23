@@ -1,3 +1,7 @@
+// Stage 2: パスA — OpenAI 互換 tool calling によるエージェント
+// Superseded by: src/main/scala/agent/AgentLoop.scala
+// Run: scala-cli run stages/stage2/agent_path_a.scala --main-class runTests
+
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19

@@ -1,3 +1,6 @@
+// Stage 0: 推論 API 疎通・レイテンシ計測
+// Run: scala-cli run stages/stage0/latency.scala
+
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19

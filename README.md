@@ -47,11 +47,27 @@ LLM_MODEL=gpt-4o
 ## セットアップ
 
 ```bash
-# scala-cli の導入（未導入の場合）
-brew install Virtuslab/scala-cli/scala-cli
-
 # .env を作成して環境に応じたバックエンド設定を記入
 cp .env.example .env
+```
+
+## ビルド・テスト・実行
+
+```bash
+# コンパイル
+sbt compile
+
+# ユニットテスト（ネットワーク不要）
+sbt "testOnly tools.egov.ArticleNumberConverterTest tools.egov.LawRepositoryTest"
+
+# 全テスト（統合テストはネットワーク必要）
+sbt test
+
+# Stage 4 実験（LLM サーバーが起動している必要あり）
+sbt "runMain stages.Stage4Main"
+
+# scala-cli スクリプト（Stage 0-3）
+scala-cli run stages/stage0/latency.scala
 ```
 
 ## 学習ステージ
@@ -67,27 +83,47 @@ cp .env.example .env
 | 4 | 状態管理・会話履歴 | セッション永続化、コンテキスト窓管理 |
 | 5 | 計画と分解 | 静的/適応的プランニング |
 | 6 | 自己評価・修正ループ | 評価プロンプト + 再生成 |
-| 7 | 研究タスク応用 | 法学ドメイン向け統合 |
+| 7 | Thinking/Reasoning ブロック分析 | LLM 推論過程の観察 |
 
 詳細な実装手順は [`docs/guide/agentic-system-learning-guide-scala.md`](docs/guide/agentic-system-learning-guide-scala.md) を参照。
 Python 版ガイド（[`docs/guide/agentic-system-learning-guide.md`](docs/guide/agentic-system-learning-guide.md)）は参考資料として残す。
 
-## 言語戦略
+## sbt プロジェクト構成（Stage 4+）
 
-- **Stage 0–2**: Scala 3 + scala-cli — sbt 不要、`//> using dep` でスクリプト即時実行
-- **Stage 3+**: Scala 3 + sbt プロジェクト — ADT + パターンマッチによる型安全なモデリング
+```
+src/main/scala/
+├── messages/     # ChatMessage ADT + JSON codecs
+├── agent/        # AgentLoop, ConversationState, ConversationLogger
+├── tools/        # ToolDispatch, Arithmetic
+│   └── egov/     # e-Gov 法令 API V1 クライアント
+└── stages/       # Stage ごとのエントリポイント
+```
 
 ## ディレクトリ構成
 
 ```
 .
-├── docs/                # 設計文書・学習ガイド
+├── build.sbt            # sbt プロジェクト定義
+├── project/             # sbt メタビルド
+├── src/                 # Scala ソース + テスト（Stage 4+）
+├── docs/
+│   ├── guide/           # 学習ガイド（Scala版 + Python版参考）
+│   ├── egov-api/        # e-Gov 法令 API 仕様書 + 設計書
+│   ├── research/        # 調査レポート
+│   └── code/            # コードドキュメント（HTML）
 ├── stages/              # ステージごとの作業ディレクトリ
-│   ├── stage0/          # 推論 API 疎通・レイテンシ計測
-│   ├── stage1/          # 構造化出力
-│   ├── stage2/          # 単一ツール呼び出し
-│   └── ...
-├── sessions/            # 会話セッションデータ（Stage 4+、gitignore対象）
+│   ├── PROTOCOL.md      # Stage 実行プロトコル
+│   ├── stage0-3/        # scala-cli スクリプト + RESULTS.md
+│   ├── stage4/          # RESULTS.md, NOTES.md, 会話ログ
+│   └── stage7/          # PLAN.md（Thinking 分析計画）
+├── sessions/            # 会話セッションデータ（gitignore対象）
 ├── .env.example         # 環境変数テンプレート
 └── .env                 # 環境変数（gitignore対象）
 ```
+
+## ドキュメント
+
+- **コードドキュメント**: [`docs/code/index.html`](docs/code/index.html) — アーキテクチャ解説 + Usage ガイド
+- **API リファレンス**: `sbt doc` → `target/scala-3.6.4/api/index.html`
+- **学習ガイド**: [`docs/guide/agentic-system-learning-guide-scala.md`](docs/guide/agentic-system-learning-guide-scala.md)
+- **e-Gov API 設計書**: [`docs/egov-api/egov-law-client-design.md`](docs/egov-api/egov-law-client-design.md)

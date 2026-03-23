@@ -4,7 +4,29 @@ import agent.*
 import messages.*
 import java.nio.file.Paths
 
-/** Stage 4: 複数ターン対話 + コンテキスト管理の体験 */
+/** Stage 4 実験のエントリポイント: 複数ターン対話 + コンテキスト管理の体験。
+  *
+  * 10件の事前定義されたクエリを順に実行し、以下を観察する:
+  *  - ツール呼び出しの正否（3ツールの使い分け）
+  *  - コンテキスト（メッセージ数・推定文字数・API トークン数）の推移
+  *  - 過去のターンへの文脈参照の正確性
+  *  - 切り詰め（truncation）の動作確認
+  *
+  * '''再利用コンポーネントではない''': 実験スクリプトとして設計されている。
+  * 新しい実験を行う場合は、別の `StageNMain` を作成する。
+  *
+  * == 環境変数 ==
+  *  - `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL`: [[agent.AgentConfig]] 経由で参照
+  *  - `STAGE4_LOG`: 会話ログの出力先パス（デフォルト: `stages/stage4/conversation-log.md`）
+  *
+  * == 実行方法 ==
+  * {{{
+  * sbt "runMain stages.Stage4Main"
+  * }}}
+  *
+  * @see `stages/stage4/RESULTS.md` 実験結果レポート
+  * @see `stages/stage4/NOTES.md` 実験ノート
+  */
 object Stage4Main {
 
   val config = AgentConfig()
@@ -39,16 +61,12 @@ object Stage4Main {
       val turnNum = i + 1
       println(s"--- Turn $turnNum: ${query.take(40)} ---")
 
-      // ユーザーメッセージ追加
       state.add(ChatMessage.User(query))
       logger.turnStart(turnNum, query)
 
-      // エージェント実行
       val (result, updatedMessages) = AgentLoop.runTurn(state.messages, config)
 
-      // ツール呼び出しログを記録
       val newMessages = updatedMessages.drop(state.messageCount)
-      // ToolResult と対応する tool call を紐付けて記録
       var toolCallIdx = 0
       for (msg <- newMessages) {
         msg match {
@@ -64,11 +82,9 @@ object Stage4Main {
 
       state.addAll(newMessages)
 
-      // ログ記録
       val answer = result.response.content.getOrElse("(empty)")
       logger.assistantResponse(answer, result.totalTokens, state.estimateTokens, state.messageCount)
 
-      // stdout
       println(s"  Answer: ${answer.take(150).replace("\n", " ")}")
       println(s"  Tool calls: ${result.toolCalls.mkString(", ").take(80)}")
       println(s"  API tokens this turn: ${result.totalTokens}")
@@ -78,7 +94,6 @@ object Stage4Main {
       state.save()
     }
 
-    // サマリー
     logger.summary(state.messageCount, state.estimateTokens)
     logger.save()
 
@@ -88,9 +103,8 @@ object Stage4Main {
     println(s"  Total messages: ${state.messageCount}")
     println(s"  Estimated chars: ${state.estimateTokens}")
     println(s"  Session saved to: sessions/stage4-test.json")
-    println(s"  Conversation log: stages/stage4/conversation-log.md")
+    println(s"  Conversation log: $logFile")
 
-    // truncation テスト
     println()
     println("--- Truncation test (limit: 3000 chars) ---")
     val beforeCount = state.messageCount

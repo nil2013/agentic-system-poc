@@ -1,3 +1,7 @@
+// Stage 3: 3ツール（条文検索/法令名検索/計算）のルーティング精度比較
+// Superseded by: src/main/scala/tools/ToolDispatch.scala（sbt 版）
+// Run: scala-cli run stages/stage3/routing.scala
+
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19

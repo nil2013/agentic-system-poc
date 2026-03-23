@@ -1,3 +1,6 @@
+// Stage 2: 条文検索ツール + 単体テスト（KnownLaws ハードコード版、後に tools/egov/ で置換）
+// Run: scala-cli run stages/stage2/statute_search.scala
+
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep org.scala-lang.modules::scala-xml:2.3.0

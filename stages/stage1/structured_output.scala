@@ -1,3 +1,6 @@
+// Stage 1: 構造化出力の3手法比較（プロンプト / JSON mode / JSON Schema）
+// Run: scala-cli run stages/stage1/structured_output.scala
+
 //> using scala 3.6
 //> using dep com.softwaremill.sttp.client4::core:4.0.19
 //> using dep com.softwaremill.sttp.client4::circe:4.0.19

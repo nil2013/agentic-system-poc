@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>agentic-system-poc — コードドキュメント</title>
+<style>
+  :root { --bg: #fafafa; --fg: #222; --accent: #2563eb; --muted: #666; --border: #ddd; --code-bg: #f0f0f0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: "Hiragino Sans", "Noto Sans JP", sans-serif; background: var(--bg); color: var(--fg); line-height: 1.7; max-width: 900px; margin: 0 auto; padding: 2rem 1.5rem; }
+  h1 { font-size: 1.8rem; border-bottom: 3px solid var(--accent); padding-bottom: 0.5rem; margin-bottom: 1.5rem; }
+  h2 { font-size: 1.4rem; color: var(--accent); margin-top: 2.5rem; margin-bottom: 0.8rem; border-bottom: 1px solid var(--border); padding-bottom: 0.3rem; }
+  h3 { font-size: 1.1rem; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+  p { margin-bottom: 0.8rem; }
+  code { background: var(--code-bg); padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; font-family: "JetBrains Mono", "Menlo", monospace; }
+  pre { background: var(--code-bg); padding: 1rem; border-radius: 6px; overflow-x: auto; margin: 1rem 0; font-size: 0.85em; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: 0.9em; }
+  th, td { border: 1px solid var(--border); padding: 0.5rem 0.8rem; text-align: left; }
+  th { background: var(--code-bg); font-weight: 600; }
+  ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+  li { margin-bottom: 0.3rem; }
+  .note { background: #eff6ff; border-left: 4px solid var(--accent); padding: 0.8rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+  .warn { background: #fef3c7; border-left: 4px solid #d97706; padding: 0.8rem 1rem; margin: 1rem 0; border-radius: 0 4px 4px 0; }
+  .arch-diagram { font-family: monospace; white-space: pre; background: var(--code-bg); padding: 1.5rem; border-radius: 6px; line-height: 1.4; font-size: 0.85em; }
+  nav { background: var(--code-bg); padding: 1rem 1.5rem; border-radius: 6px; margin-bottom: 2rem; }
+  nav ul { list-style: none; margin: 0; padding: 0; }
+  nav li { margin-bottom: 0.3rem; }
+  nav a { color: var(--accent); text-decoration: none; }
+  nav a:hover { text-decoration: underline; }
+  .muted { color: var(--muted); font-size: 0.9em; }
+</style>
+</head>
+<body>
+
+<h1>agentic-system-poc コードドキュメント</h1>
+<p class="muted">ローカル LLM 推論による Agentic System の段階的構築 PoC — Scala 実装ガイド</p>
+
+<nav>
+<ul>
+  <li><a href="#overview">1. Overview</a></li>
+  <li><a href="#common">2. 共通機能</a>
+    <ul>
+      <li><a href="#messages">2.1 messages — ChatMessage ADT</a></li>
+      <li><a href="#agent">2.2 agent — エージェントループ</a></li>
+      <li><a href="#tools">2.3 tools — ツールディスパッチ</a></li>
+    </ul>
+  </li>
+  <li><a href="#egov">3. e-Gov 法令 API クライアント</a>
+    <ul>
+      <li><a href="#egov-arch">3.1 アーキテクチャ</a></li>
+      <li><a href="#egov-pipeline">3.2 find_laws → get_article パイプライン</a></li>
+      <li><a href="#egov-resolve">3.3 法令名の解決</a></li>
+      <li><a href="#egov-kanji">3.4 条番号の漢数字変換</a></li>
+    </ul>
+  </li>
+  <li><a href="#stages">4. ステージ別実装</a></li>
+  <li><a href="#usage">5. Usage</a></li>
+</ul>
+</nav>
+
+<!-- ===== 1. Overview ===== -->
+<h2 id="overview">1. Overview</h2>
+
+<p>本プロジェクトは、LLM エージェントアーキテクチャの各概念をフレームワーク（LangChain 等）に頼らず段階的に構築する学習・PoC リポジトリです。OpenAI 互換 API を共通インターフェースとして、GPU WS 上の llama-server と Mac ローカルの mlx-lm をバックエンドに使用します。</p>
+
+<p>Scala 実装は3層のレイヤーで構成されています:</p>
+
+<div class="arch-diagram">
+┌──────────────────────────────────────────────┐
+│  LLM (Qwen3.5-35B-A3B / 9B)                 │
+│  OpenAI 互換 Chat Completions API            │
+└────────────────┬─────────────────────────────┘
+                 │ HTTP (JSON)
+┌────────────────┴─────────────────────────────┐
+│  Agent Layer                                  │
+│  AgentLoop: ReAct ループ（思考→行動→観察）    │
+│  ConversationState: セッション永続化          │
+│  ConversationLogger: 会話ログ記録             │
+├───────────────────────────────────────────────┤
+│  Tool Layer                                   │
+│  ToolDispatch: ツール定義 + ディスパッチ       │
+│  ├─ find_laws → LawRepository                │
+│  ├─ get_article → ArticleRepository          │
+│  └─ calculate → Arithmetic                   │
+├───────────────────────────────────────────────┤
+│  API Client Layer                             │
+│  EGovApiClient: e-Gov 法令 API V1            │
+│  (HTTP + XML パース)                          │
+└───────────────────────────────────────────────┘
+</div>
+
+<p>パッケージ構成:</p>
+<pre><code>src/main/scala/
+├── messages/     ChatMessage ADT + JSON codecs
+├── agent/        AgentLoop, ConversationState, ConversationLogger
+├── tools/        ToolDispatch, Arithmetic
+│   └── egov/     e-Gov API クライアント (5ファイル)
+└── stages/       Stage ごとのエントリポイント</code></pre>
+
+<!-- ===== 2. 共通機能 ===== -->
+<h2 id="common">2. 共通機能</h2>
+
+<h3 id="messages">2.1 messages — ChatMessage ADT</h3>
+
+<p>OpenAI Chat Completions API のメッセージを Scala 3 の <code>enum</code> ADT として型安全に表現します。</p>
+
+<pre><code>enum ChatMessage {
+  case System(content: String)
+  case User(content: String)
+  case Assistant(content: Option[String], toolCalls: List[ToolCallInfo])
+  case ToolResult(toolCallId: String, content: String)
+}</code></pre>
+
+<p><strong>なぜ ADT か:</strong> LLM API のメッセージは role によって構造が異なります（<code>assistant</code> は <code>tool_calls</code> を持ちうるが <code>user</code> は持たない）。JSON の <code>Map[String, Any]</code> で扱うと、これらの構造差異が実行時まで検出できません。ADT にすることで、<code>match</code> の網羅性チェックがコンパイル時に行われます。</p>
+
+<p><strong>重要な不変条件:</strong></p>
+<ul>
+  <li><code>Assistant</code> の <code>toolCalls</code> が非空 → LLM がツール実行を要求している</li>
+  <li><code>Assistant</code> の <code>toolCalls</code> が空 → LLM の最終回答（エージェントループの終了条件）</li>
+</ul>
+
+<p><code>ChatMessage.toJson</code> / <code>fromJson</code> は API の JSON 形式との相互変換を行います。注意点として、<code>tool_calls[].function.arguments</code> は API では JSON <strong>文字列</strong>（ネストされた JSON ではない）として扱われます。</p>
+
+<h3 id="agent">2.2 agent — エージェントループ</h3>
+
+<p><strong>AgentLoop</strong> は ReAct パターンの核です。以下のループを繰り返します:</p>
+
+<ol>
+  <li>メッセージ履歴 + ツール定義を LLM に送信</li>
+  <li>レスポンスに <code>tool_calls</code> が含まれるか判定</li>
+  <li>含まれなければ → 最終回答として返す（ループ終了）</li>
+  <li>含まれていれば → 各ツールを実行し、結果を <code>ToolResult</code> として履歴に追加 → 1 に戻る</li>
+</ol>
+
+<p><code>maxToolRounds</code>（デフォルト: 5）がガードとして機能し、LLM がツールを呼び続ける無限ループを防ぎます。通常の対話では 2-3 ラウンドで収束します。</p>
+
+<p><strong>ConversationState</strong> は複数ターンにわたるメッセージ履歴を <code>sessions/{sessionId}.json</code> に永続化します。コンテキストウィンドウの有限性に対応するため、<code>truncateIfNeeded</code> で古いメッセージを FIFO で削除できます。</p>
+
+<div class="note">
+<strong>トークン推定:</strong> <code>estimateTokens</code> は JSON 文字列の文字数を数えるヒューリスティックです。実際のトークン数とは 3-4 倍のずれがあります。パラメータ名 <code>maxTokens</code> は misnomer（実態は文字数）です。
+</div>
+
+<p><strong>ConversationLogger</strong> は会話ログを Markdown 形式で生成します。RESULTS.md の Discussion セクションでの定性的分析に使用されます（<code>stages/PROTOCOL.md</code> §4.1.1 参照）。</p>
+
+<h3 id="tools">2.3 tools — ツールディスパッチ</h3>
+
+<p><code>ToolDispatch</code> は2つの責務を持ちます:</p>
+
+<table>
+<tr><th>責務</th><th>メンバ</th><th>説明</th></tr>
+<tr><td>スキーマ定義</td><td><code>toolDefs</code></td><td>OpenAI API の <code>tools</code> パラメータとして送信される JSON。LLM はこれを見てツールを選択する。<strong>description は事実上プロンプトの一部</strong></td></tr>
+<tr><td>ディスパッチ</td><td><code>dispatch</code></td><td>LLM が返した <code>tool_calls</code> を受け取り、対応する実装に振り分ける</td></tr>
+</table>
+
+<p><strong>ツール追加の手順:</strong></p>
+<ol>
+  <li><code>toolDefs</code> の <code>Json.arr</code> にツール定義を追加</li>
+  <li><code>dispatch</code> の <code>match</code> に <code>case</code> を追加</li>
+  <li>ツールの実装を作成（<code>tools/</code> または <code>tools/egov/</code> パッケージ）</li>
+</ol>
+
+<p>現在のツール一覧:</p>
+<table>
+<tr><th>ツール名</th><th>機能</th><th>実装</th></tr>
+<tr><td><code>find_laws</code></td><td>法令名キーワード検索</td><td><code>egov.LawRepository.findByKeyword</code></td></tr>
+<tr><td><code>get_article</code></td><td>条文取得（lawId + 条番号）</td><td><code>egov.LawRepository.resolveLawId</code> + <code>egov.ArticleRepository.getArticle</code></td></tr>
+<tr><td><code>calculate</code></td><td>四則演算</td><td><code>Arithmetic.calculate</code></td></tr>
+</table>
+
+<!-- ===== 3. e-Gov 法令 API クライアント ===== -->
+<h2 id="egov">3. e-Gov 法令 API クライアント</h2>
+
+<h3 id="egov-arch">3.1 アーキテクチャ</h3>
+
+<p><code>tools.egov</code> パッケージは e-Gov 法令 API V1 をラップして、LLM の Tool Calling から利用できるインターフェースを提供します。</p>
+
+<pre><code>ToolDispatch
+  ├─ LawRepository    ← 法令一覧キャッシュ + 名前解決
+  │    └─ EGovApiClient.fetchLawList()   ← /lawlists/2
+  └─ ArticleRepository ← 条文取得 + XML パース
+       ├─ ArticleNumberConverter  ← "709" → "第七百九条"
+       └─ EGovApiClient.fetchArticle()   ← /articles;lawId=...;article=...</code></pre>
+
+<p><strong>EGovApiClient</strong> は HTTP リクエストと XML パースのみを担当する薄いラッパーです。同期・ブロッキング設計（LLM 推論がボトルネックのため非同期化の利点が薄い）。</p>
+
+<div class="warn">
+<strong>URL 形式の注意:</strong> <code>/articles</code> エンドポイントは標準的なクエリパラメータ（<code>?key=value</code>）ではなく、<strong>セミコロン区切りの matrix parameter</strong> を使用します（JAX-RS 形式）。sttp の URI 補間子はこれに対応しないため、完全な URL 文字列を構築して <code>Uri.unsafeParse</code> で変換しています。
+</div>
+
+<h3 id="egov-pipeline">3.2 find_laws → get_article パイプライン</h3>
+
+<p>LLM が法令の条文を取得する典型的なフローです:</p>
+
+<pre><code>User: 「個人情報保護法の第1条を見せてください」
+
+1. LLM → find_laws(keyword="個人情報")
+   → LawRepository.findByKeyword → e-Gov /lawlists/2
+   → "個人情報の保護に関する法律 [ID: 415AC0000000057]"
+
+2. LLM → get_article(law_id_or_name="415AC0000000057", article_number="1")
+   → LawRepository.resolveLawId → lawId はそのまま通過
+   → ArticleNumberConverter: "1" → "第一条"
+   → EGovApiClient.fetchArticle → e-Gov /articles;lawId=415AC0000000057;article=第一条
+   → XML パース → ArticleContent → toText</code></pre>
+
+<p>LLM は Step 1 の結果から lawId を記憶し、Step 2 でそれを使います。<code>find_laws</code> の返却フォーマットに <code>[ID: ...]</code> を含めているのは、LLM がこの情報をピックアップしやすくするためです。</p>
+
+<h3 id="egov-resolve">3.3 法令名の解決</h3>
+
+<p><code>LawRepository.resolveLawId</code> は、LLM が指定する多様な形式の法令名を lawId に変換します。4段階のフォールバックチェーン:</p>
+
+<table>
+<tr><th>段階</th><th>条件</th><th>例</th></tr>
+<tr><td>1. lawId 検出</td><td>半角英数のみ</td><td><code>"415AC0000000057"</code> → そのまま</td></tr>
+<tr><td>2. 完全一致</td><td>法令一覧の lawName と一致</td><td><code>"民法"</code> → <code>"129AC0000000089"</code></td></tr>
+<tr><td>3. 前方/部分一致</td><td>1件なら解決、複数なら Ambiguous</td><td><code>"消費者"</code> → Ambiguous（2件）</td></tr>
+<tr><td>4. KnownLaws</td><td>ハードコード短縮名（6法）</td><td>キャッシュ未ロード時のフォールバック</td></tr>
+</table>
+
+<p>Ambiguous の場合、エラーメッセージに候補一覧と「<code>find_laws</code> で法令IDを確認してください」の誘導を含めます。これにより LLM が「まず検索してから取得」のフローを学習しやすくなります。</p>
+
+<h3 id="egov-kanji">3.4 条番号の漢数字変換</h3>
+
+<p>e-Gov API は条番号を漢数字全角で受け付けます（<code>article=第七百九条</code>）。LLM はアラビア数字（<code>"709"</code>）で指定するため、<code>ArticleNumberConverter</code> が変換を行います。</p>
+
+<pre><code>ArticleNumberConverter.toKanjiArticle(709)   // → "第七百九条"
+ArticleNumberConverter.toKanjiArticle(1)     // → "第一条"
+ArticleNumberConverter.toKanjiParagraph(3)   // → "第三項"</code></pre>
+
+<p>変換規則は日本の法令番号の慣例に従う位取り記数法（千百十の係数1は省略: 百 = 100）。対応範囲は 1〜9999。枝番号（第709条の2）は未対応です。</p>
+
+<!-- ===== 4. ステージ別実装 ===== -->
+<h2 id="stages">4. ステージ別実装</h2>
+
+<h3>Stage 0–3: scala-cli スクリプト</h3>
+
+<p>sbt 移行前のスクリプト。各ステージの実験記録として <code>stages/stageN/</code> に残っています。</p>
+
+<table>
+<tr><th>Stage</th><th>スクリプト</th><th>概要</th></tr>
+<tr><td>0</td><td><code>stages/stage0/latency.scala</code></td><td>推論 API 疎通・レイテンシ計測</td></tr>
+<tr><td>1</td><td><code>stages/stage1/structured_output.scala</code></td><td>構造化出力の3手法比較（45試行）</td></tr>
+<tr><td>2</td><td><code>stages/stage2/agent_path_a.scala</code>, <code>agent_path_b.scala</code></td><td>tool calling のパスA/B比較</td></tr>
+<tr><td>3</td><td><code>stages/stage3/routing.scala</code></td><td>3ツールルーティング精度比較</td></tr>
+</table>
+
+<p>各ステージの実験結果は <code>stages/stageN/RESULTS.md</code>（IMRaD 形式）に記録されています。</p>
+
+<h3>Stage 4: sbt プロジェクト（現在の実装）</h3>
+
+<p><code>stages.Stage4Main</code> が10件のクエリを順に実行し、複数ターン対話の動作を検証します。</p>
+
+<pre><code>sbt "runMain stages.Stage4Main"</code></pre>
+
+<p>環境変数 <code>STAGE4_LOG</code> で会話ログの出力先を変更できます（Round 2 実験で使用）。</p>
+
+<!-- ===== 5. Usage ===== -->
+<h2 id="usage">5. Usage</h2>
+
+<h3>環境変数の設定</h3>
+
+<p><code>.claude/settings.local.json</code> の <code>env</code> セクションで設定するか、<code>.env</code> ファイルを使用します:</p>
+
+<pre><code># 大学: GPU WS
+LLM_BASE_URL=http://&lt;GPU-WS-IP&gt;:8080/v1
+LLM_API_KEY=dummy
+LLM_MODEL=local
+
+# 自宅: mlx-lm
+LLM_BASE_URL=http://localhost:8000/v1
+LLM_MODEL=mlx-community/Qwen3.5-9B-MLX-8bit</code></pre>
+
+<h3>ビルド・テスト</h3>
+
+<pre><code># コンパイル
+sbt compile
+
+# ユニットテスト（ネットワーク不要）
+sbt "testOnly tools.egov.ArticleNumberConverterTest tools.egov.LawRepositoryTest"
+
+# 全テスト（統合テストはネットワーク必要）
+sbt test
+
+# API ドキュメント生成
+sbt doc
+# → target/scala-3.6.4/api/index.html</code></pre>
+
+<h3>実行</h3>
+
+<pre><code># Stage 4 実験（LLM サーバーが起動している必要あり）
+sbt "runMain stages.Stage4Main"
+
+# scala-cli スクリプト（Stage 0-3）
+scala-cli run stages/stage0/latency.scala</code></pre>
+
+<h3>ツール追加の手順</h3>
+
+<ol>
+  <li><code>src/main/scala/tools/</code> にツール実装を作成</li>
+  <li><code>ToolDispatch.toolDefs</code> にツール定義 JSON を追加（<code>description</code> は LLM のプロンプトの一部）</li>
+  <li><code>ToolDispatch.dispatch</code> に <code>case</code> を追加</li>
+  <li>テストを追加（<code>src/test/scala/</code>）</li>
+  <li><code>sbt test</code> で全テスト通過を確認</li>
+</ol>
+
+<p class="muted" style="margin-top: 3rem; text-align: center;">Generated: 2026-03-23 — agentic-system-poc</p>
+
+</body>
+</html>

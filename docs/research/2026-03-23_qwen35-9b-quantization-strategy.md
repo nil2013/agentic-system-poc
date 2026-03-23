@@ -153,14 +153,20 @@ KV キャッシュ（BF16）: ~32KB/token
 ### 実測データ（nvidia-smi, 2026-03-23）
 
 ```
-llama-server + Q4_K_M:
-  VRAM Usage: 28,056 MiB / 32,623 MiB
-  Idle Power: 33W / 200W
-  GPU Temp: 28°C
-  GPU Util: 0% (idle)
+llama-server + Q4_K_M (mmproj あり):
+  VRAM Usage: 28,056 MiB / 32,623 MiB (~27.4 GB)
+
+llama-server + Q4_K_M (mmproj なし):
+  VRAM Usage: 21,688 MiB / 32,623 MiB (~21.2 GB)
+
+共通: Idle Power 33W/200W, GPU Temp 28°C, GPU Util 0% (idle)
 ```
 
-**注記**: この計測では mmproj (mmproj-BF16) も同時にロードしている。disk サイズ (22.0GB) と実 VRAM (27.4GB) の差 (~5.4GB) には mmproj + llama-server オーバーヘッド + KV キャッシュ初期確保が含まれる。テキストのみの tool calling 用途では mmproj なしで起動すれば VRAM 消費は下がる。
+**分析**:
+- mmproj (BF16) の VRAM 消費: ~6.2 GB（28,056 - 21,688 MiB）
+- Q4_K_M (disk 22.0GB) の実 VRAM（mmproj なし）: ~21.2 GB。オーバーヘッドは約 -0.8GB（KV キャッシュ初期確保含む）
+- mmproj なしでの KV キャッシュ余力: ~10.7 GB — `-c 16384` 以上にも十分対応
+- **Q6_K (disk 28.9GB) も mmproj なしなら 32GB に収まる可能性がある**（推定 VRAM ~28-29GB）。精度比較検証時に確認
 
 ---
 

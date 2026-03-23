@@ -34,7 +34,7 @@ brew install Virtuslab/scala-cli/scala-cli  # 未導入の場合
 llama-server \
   -m <model.gguf> \
   --host 0.0.0.0 --port 8080 \
-  -ngl 99 -c 8192 --jinja -fa
+  -ngl 99 -c 8192 --jinja -fa on
 ```
 
 - `--jinja` は Stage 2 以降の tool calling に**必須**
@@ -108,6 +108,12 @@ stages/
 ├── stage5/    # 計画と分解
 └── stage6/    # 自己評価・修正ループ
 ```
+
+### 成果物の記録方針
+
+- 各ステージの成果物（スクリプト、実行結果レポート、計測ログ等）はステージディレクトリに記録する
+- 小さな結果でも記録を残す。あとで見返せることが重要
+- **端末依存の値（IP アドレス、ファイルパス等）をスクリプトにハードコードしない**。環境変数（`LLM_BASE_URL` 等）経由で参照し、`.env` や `settings.local.json` で端末ごとに設定する
 
 ## Key Design Decisions
 

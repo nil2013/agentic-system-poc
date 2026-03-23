@@ -104,7 +104,7 @@ cmake --build build --config Release -j$(nproc)
   -ngl 99 \
   -c 8192 \
   --jinja \
-  -fa
+  -fa on
 ```
 
 **パラメータの意味:**

@@ -105,27 +105,45 @@
 
 **課題**: 同じタスクに対して「高レベル計画」（2-3ステップ）と「詳細計画」（5-7ステップ）を生成させ、実行成功率を比較。過剰な計画が失敗を招くかどうかを検証。
 
+### A5-4: Plan-then-Execute の依存引数解決の改善
+
+**背景**: Stage 5 で `depends_on_step_N_result` が前ステップの結果テキスト全体に置換され、lawId の抽出ができなかった。
+
+**課題**: Plan の実行時に、依存引数を解決するために LLM に「前ステップの結果から必要な情報を抽出して引数を生成せよ」という中間ステップを挿入する。これにより Plan-then-Execute が T1 を成功させられるか検証。ただしこの改善は事実上 Plan-and-Replan（A5-1）に収束する可能性がある — その収束過程自体が学習ポイント。
+
 ---
 
 ## Stage 6: 自己評価の発展
 
-### A6-1: tool_result_consistent の機械検証実装
+### A6-1: tool_result_consistent の機械検証と LLM 判定の一致率計測
 
-**背景**: ガイド改訂で §6.2 に `tool_result_consistent` 基準を追加したが、実装は LLM 評価のみ。
+**背景**: Stage 6 で機械検証（`checkToolResultConsistency`）を**実装済み**。ただし LLM evaluator の thinking 消費問題（Q2, Q3 で content 空）により、一致率計測は Q1 の 1 サンプルのみ。
 
-**課題**: ツール結果がエラー（`"エラー:"` プレフィックス）であるにもかかわらず、回答に具体的な条文内容が含まれている場合を**プログラム的に**検出するロジックを実装。LLM 評価とプログラム検出の一致率を計測。
+**課題**: evaluator の thinking 消費問題（A6-5）を解決した上で、より多くのサンプルで機械検証と LLM 判定の一致率を計測。不一致パターンの分類。
 
-### A6-2: SystemPrompt 制御 + tool_result_consistent の二重防御
+### A6-2: SystemPrompt 制御 + tool_result_consistent の二重防御の限界テスト
 
-**背景**: Stage 5 で SystemPrompt 制御の効果が確認されたが、完全ではない（推測として内部知識が漏出）。
+**背景**: Stage 6 で二重防御を**実装済み**。ただし SystemPrompt 制御が有効だったため静かなフォールバック自体が発生せず、検出能力の検証が不十分。
 
-**課題**: SystemPrompt 制御（予防）+ tool_result_consistent（検出）の組み合わせで、静かなフォールバックの検出率と抑制率を計測。
+**課題**: SystemPrompt 制御を意図的に外した状態（Stage 5 T3「制御なし」相当）で evaluator を実行し、`tool_result_consistent` がフォールバックを正しく検出するか検証。
 
 ### A6-3: evaluator のモデル分離
 
-**背景**: ガイド §6.1 で「同一モデルによる自己評価の self-consistency bias」を指摘。
+**背景**: ガイド §6.1 で「同一モデルによる自己評価の self-consistency bias」を指摘。WS 増設待ち。
 
-**課題**: generator と evaluator に異なるモデル（例: 35B で生成、9B で評価、または逆）を使い、bias の低減効果を検証。ただし 9B は thinking-off が必要（§0.3 項7）。
+**課題**: generator と evaluator に異なるモデル（例: 35B で生成、9B で評価、または逆）を使い、bias の低減効果を検証。ただし 9B は thinking-off が必要（§0.3 項7）。現在は物理的に並列実行環境がないため保留。
+
+### A6-4: evaluator の条番号正規化
+
+**背景**: Stage 6 Q1 で evaluator が「709条 ≠ 第七百九条」と誤判定（false positive）。漢数字とアラビア数字の対応を理解できていない。
+
+**課題**: evaluator の EvaluatorPrompt に「条番号はアラビア数字と漢数字の両方の表記がある。709条 = 第七百九条である」という知識を追加する。あるいは、機械検証側で条番号を正規化してから比較するロジックを実装。
+
+### A6-5: evaluator の thinking 抑制
+
+**背景**: Stage 6 で evaluator の content が空になる問題（Q2, Q3）。evaluator は JSON 1行を返すだけなのに thinking で ~2000 tokens 消費する。max_tokens=4096 でも複雑なクエリでは不足。
+
+**課題**: evaluator の API リクエストに `response_format: {"type": "json_object"}` を指定して thinking を抑制できるか検証（llama-server の挙動に依存）。あるいは evaluator 専用の thinking-off パラメータが使えるか調査。
 
 ---
 
@@ -133,19 +151,39 @@
 
 ### A7-1: thinking ブロックの定量分析フレームワーク
 
-**背景**: Stage 7 の PLAN.md に分析観点を記述済みだが、定量指標が未定義。
+**背景**: Stage 7 で thinking 統計を収集（5ケース）。thinking 比率はタスクタイプで明確に異なる（ツール使用後 0-25%、ツール不使用 ~50%、content 空 100%）。
 
 **課題**: thinking ブロックの以下の指標を自動計測するフレームワークを実装:
 - thinking tokens 数（ターン・タスクタイプ別）
-- thinking 内でのツール選択言及回数
-- thinking の「反芻」パターン（同じ内容の繰り返し）の検出
+- thinking の「反芻」パターン（同じ内容の繰り返し）の検出 — Stage 7 では反芻は観察されなかったが、サンプルサイズが小さい
 - thinking と最終回答の整合性
+- thinking 比率とツール結果の有無の相関
 
 ### A7-2: thinking ブロックから SystemPrompt / tool description を改善
 
 **背景**: 調査で「ReAct は近似検索として機能している可能性」(Stechly 2024) が指摘された。
 
 **課題**: thinking ブロックを分析して、LLM がツール選択時にどの情報（SystemPrompt の指示？tool description？few-shot 例の記憶？）を参照しているかを特定。参照パターンに基づいて description を改善し、ルーティング精度への影響を計測。
+
+**注意**: Stage 7 で判明した通り、tool_calls を含むレスポンスでは reasoning_content が空のため、ツール選択の推論は直接観察不能（A7-3 参照）。ツール不使用判断（T2）の thinking のみ分析可能。
+
+### A7-3: 中間ラウンドの reasoning キャプチャ
+
+**背景**: Stage 7 の最大の発見 — tool_calls を含むレスポンスでは `reasoning_content` が空であり、**ツール選択の推論過程が観察不能**。現在の AgentLoop は最終回答の reasoning のみキャプチャしている。
+
+**課題**: AgentLoop の各ラウンド（tool_calls ありのレスポンスを含む）から reasoning_content を収集してリスト化する。llama-server が tool_calls レスポンスで reasoning_content を返すかどうかはサーバー側の挙動に依存するため、まず API レスポンスを raw で確認する必要がある。
+
+### A7-4: thinking の「回答しない」判断の分析
+
+**背景**: Stage 7 T4 で content=0 だが max_tokens=8192 でも同一結果。thinking で「この法律は尊崇義務と関係ない」と分析した結果、content を生成せずに停止した。
+
+**課題**: T4 のような「thinking で正しく分析しているが回答を生成しない」パターンを体系的に収集。この判断が適切な場合（本当に回答不能）と不適切な場合（回答すべきだが停止してしまう）を区別する基準を設計。thinking の内容を回答に転用する仕組みの検討。
+
+### A7-5: thinking 比率とツール結果の関係
+
+**背景**: Stage 7 の統計で、ツール結果がある場合は thinking 比率が低く（0-25%）、ない場合は高い（50-100%）傾向が見えた。
+
+**課題**: より多くのサンプル（Stage 1-6 の全テストケース + 追加ケース）で thinking 比率を計測し、この傾向を統計的に確認。「ツールが知識の外部化を担当し、thinking はツールが使えない場面での内部推論を担当する」という仮説を検証。
 
 ---
 

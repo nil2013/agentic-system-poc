@@ -13,7 +13,9 @@ import java.nio.file.Paths
 object Stage7Main {
 
   // SystemPrompt 制御あり（Stage 6 と同じ）
+  // max_tokens は環境変数で切替可能（Round 2 で 8192 に引き上げて T4 の content 空を解消試行）
   val config = AgentConfig(
+    maxTokens = sys.env.getOrElse("STAGE7_MAX_TOKENS", "4096").toInt,
     systemPrompt = AgentConfig().systemPrompt +
       "\n\n重要: ツールがエラーを返した場合は、エラーの内容をそのままユーザーに伝えてください。" +
       "内部知識で代替回答しないでください。"
@@ -32,7 +34,8 @@ object Stage7Main {
     println(s"LLM_BASE_URL = ${config.baseUrl}")
     println()
 
-    val logger = new ConversationLogger(Paths.get("stages/stage7/conversation-log.md"))
+    val logFile = sys.env.getOrElse("STAGE7_LOG", "stages/stage7/conversation-log.md")
+    val logger = new ConversationLogger(Paths.get(logFile))
     logger.header("Stage 7: Thinking Block Analysis Log", config)
 
     var thinkingStats = List.empty[(String, Int, Int)] // (id, thinking_chars, content_chars)
@@ -102,6 +105,6 @@ object Stage7Main {
 
     logger.summary(0, 0)
     logger.save()
-    println(s"\nLog: stages/stage7/conversation-log.md")
+    println(s"\nLog: $logFile")
   }
 }

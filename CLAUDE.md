@@ -144,22 +144,21 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-24_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **Stage 0-5 完了**（推論疎通 → 構造化出力 → 単一ツール → 複数ツール → 状態管理 → 計画と分解）
-- ガイド包括的改訂（R-01〜R-13、13項目。改訂提案は `docs/guide/guide-revision-proposal.md`）
-- Planning アーキテクチャ文献調査（`docs/research/2026-03-24_planning-architectures-survey.md`）
+- **Stage 0-6 完了**（推論疎通 → 構造化出力 → 単一ツール → 複数ツール → 状態管理 → 計画と分解 → 自己評価）
+- ガイド包括的改訂（R-01〜R-13、13項目）
+- Planning アーキテクチャ文献調査
 - 発展的学習ガイド策定（`docs/guide/advanced-topics.md`）
-- Scaladoc 整備 + HTML/Markdown コードドキュメント
 
 ### 主な知見
-- **Stage 1-4 で一貫した天井効果**: ツール選択・構造化出力ともに完璧
-- **Plan-then-Execute は全滅**: 依存引数の解決不能。Adaptive（ReAct型）が完璧に動作
-- **SystemPrompt 制御で静かなフォールバックを抑制**: 1行追加でエラー報告の誠実さを確保。ただし内部知識の完全排除は困難（推測として漏出）
-- **9B + thinking-on は性能劣化**: 推論速度 ~20倍低下、精度 ~1/4（ユーザー報告）。9B は thinking-off 推奨
+- **Stage 1-6 で一貫した天井効果**: 修正ループすら発動しない。35B-A3B がオーバースペック
+- **SystemPrompt 制御が有効**: Stage 6 Q2 で「誠実かつ能動的」な挙動を誘発（エラー報告 + adaptive 追加検索）
+- **Evaluator の構造的問題**: thinking 消費で複雑クエリほど evaluator が動作しない。漢数字/アラビア数字の誤認（false positive）
+- **Plan-then-Execute は全滅、Adaptive が完璧**: 文献と整合（ReWOO 型の既知の限界）
 
 ### 次のアクション（優先順）
-1. Stage 6（自己評価と修正ループ）の実施
-2. SystemPrompt 制御を AgentConfig デフォルトに組み込む
-3. `tool_result_consistent` 基準の実装・検証
+1. Stage 7（Thinking/Reasoning ブロック分析）の実施
+2. Evaluator の thinking 消費問題の対策検討
+3. Stage 8（REPL 統合）
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

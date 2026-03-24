@@ -2,12 +2,9 @@ package stages
 
 import agent.*
 import messages.*
-import tools.ToolDispatch
 import io.circe.*
 import io.circe.generic.auto.*
-import io.circe.syntax.*
-import io.circe.parser.{decode, parse}
-import sttp.client4.*
+import io.circe.parser.decode
 import java.nio.file.Paths
 
 /** Stage 6: 自己評価と修正ループの実験。
@@ -20,9 +17,7 @@ object Stage6Main {
 
   // SystemPrompt にフォールバック制御を組み込んだ generator config
   val generatorConfig = AgentConfig(
-    systemPrompt = AgentConfig().systemPrompt +
-      "\n\n重要: ツールがエラーを返した場合は、エラーの内容をそのままユーザーに伝えてください。" +
-      "内部知識で代替回答しないでください。"
+    promptSections = List(Prompts.Role, Prompts.FallbackControl)
   )
 
   // Evaluator 用の定義
@@ -79,32 +74,11 @@ object Stage6Main {
       ""
     }
 
-    val body = Json.obj(
-      "model" -> Json.fromString(generatorConfig.model),
-      "messages" -> Json.arr(
-        Json.obj("role" -> Json.fromString("system"), "content" -> Json.fromString(EvaluatorPrompt)),
-        Json.obj("role" -> Json.fromString("user"), "content" -> Json.fromString(
-          s"質問: $query\n\n回答: $answer$toolContext"
-        ))
-      ),
-      "max_tokens" -> Json.fromInt(4096),
-      "temperature" -> Json.fromDoubleOrNull(0.0)
+    val messages = List(
+      ChatMessage.System(EvaluatorPrompt),
+      ChatMessage.User(s"質問: $query\n\n回答: $answer$toolContext")
     )
-
-    val backend = DefaultSyncBackend()
-    val resp = basicRequest
-      .post(uri"${generatorConfig.baseUrl}/chat/completions")
-      .contentType("application/json")
-      .body(body.noSpaces)
-      .response(asString)
-      .readTimeout(scala.concurrent.duration.Duration(120, "s"))
-      .send(backend)
-    backend.close()
-
-    val respJson = parse(resp.body.getOrElse("{}")).getOrElse(Json.Null)
-    val content = respJson.hcursor
-      .downField("choices").downArray.downField("message").downField("content")
-      .as[String].getOrElse("")
+    val (content, _) = LlmClient.contentOnly(messages, generatorConfig)
 
     if (content.isEmpty) {
       return Left("evaluator content が空（thinking 消費）")

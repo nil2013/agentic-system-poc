@@ -13,12 +13,10 @@ import java.nio.file.Paths
 object Stage7Main {
 
   // SystemPrompt 制御あり（Stage 6 と同じ）
-  // max_tokens は環境変数で切替可能（Round 2 で 8192 に引き上げて T4 の content 空を解消試行）
+  // max_tokens は環境変数で切替可能
   val config = AgentConfig(
     maxTokens = sys.env.getOrElse("STAGE7_MAX_TOKENS", "4096").toInt,
-    systemPrompt = AgentConfig().systemPrompt +
-      "\n\n重要: ツールがエラーを返した場合は、エラーの内容をそのままユーザーに伝えてください。" +
-      "内部知識で代替回答しないでください。"
+    promptSections = List(Prompts.Role, Prompts.FallbackControl)
   )
 
   val testCases = List(

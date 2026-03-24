@@ -6,8 +6,7 @@ import tools.ToolDispatch
 import tools.egov.*
 import io.circe.*
 import io.circe.syntax.*
-import io.circe.parser.{decode, parse}
-import sttp.client4.*
+import io.circe.parser.parse
 import java.nio.file.Paths
 
 /** Stage 5: 計画と分解（Planning）の比較実験。
@@ -22,9 +21,7 @@ object Stage5Main {
 
   // SystemPrompt にフォールバック制御を追加した版
   val controlledConfig = baseConfig.copy(
-    systemPrompt = baseConfig.systemPrompt +
-      "\n\n重要: ツールがエラーを返した場合は、エラーの内容をそのままユーザーに伝えてください。" +
-      "内部知識で代替回答しないでください。「見つかりませんでした」と正直に伝えてください。"
+    promptSections = List(Prompts.Role, Prompts.FallbackControl)
   )
 
   val PlanningPrompt = """|与えられたタスクを、利用可能なツールだけで遂行できるステップに分解してください。
@@ -48,30 +45,11 @@ object Stage5Main {
   // --- Plan-then-Execute ---
 
   def generatePlan(task: String, config: AgentConfig): Either[String, Plan] = {
-    val body = Json.obj(
-      "model" -> Json.fromString(config.model),
-      "messages" -> Json.arr(
-        Json.obj("role" -> Json.fromString("system"), "content" -> Json.fromString(PlanningPrompt)),
-        Json.obj("role" -> Json.fromString("user"), "content" -> Json.fromString(task))
-      ),
-      "max_tokens" -> Json.fromInt(config.maxTokens),
-      "temperature" -> Json.fromDoubleOrNull(0.0)
+    val messages = List(
+      ChatMessage.System(PlanningPrompt),
+      ChatMessage.User(task)
     )
-
-    val backend = DefaultSyncBackend()
-    val resp = basicRequest
-      .post(uri"${config.baseUrl}/chat/completions")
-      .contentType("application/json")
-      .body(body.noSpaces)
-      .response(asString)
-      .readTimeout(scala.concurrent.duration.Duration(120, "s"))
-      .send(backend)
-    backend.close()
-
-    val respJson = parse(resp.body.getOrElse("{}")).getOrElse(Json.Null)
-    val content = respJson.hcursor
-      .downField("choices").downArray.downField("message").downField("content")
-      .as[String].getOrElse("")
+    val (content, _) = LlmClient.contentOnly(messages, config)
 
     if (content.isEmpty) {
       return Left("計画生成: content が空（thinking で消費された可能性）")

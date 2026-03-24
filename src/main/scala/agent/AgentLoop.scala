@@ -4,29 +4,30 @@ import messages.*
 import tools.ToolDispatch
 import io.circe.*
 import io.circe.syntax.*
-import io.circe.parser.parse
-import sttp.client4.*
 
 /** エージェントの動作パラメータ。
   *
-  * @param baseUrl       LLM API のベース URL。環境変数 `LLM_BASE_URL` から取得。
-  *                      OpenAI 互換 API（llama-server, mlx-lm, OpenAI API）を想定。
-  * @param model         モデル名。環境変数 `LLM_MODEL` から取得。
-  * @param maxTokens     1回の API 呼び出しの最大トークン数。Qwen3.5 の thinking mode は
-  *                      ~1500-2000 tokens を消費するため、4096 以上を推奨。
-  * @param maxToolRounds ツール呼び出しラウンドの上限。LLM がツールを繰り返し呼び続ける
-  *                      無限ループを防ぐガード。通常の対話では 2-3 ラウンドで収束する。
-  * @param systemPrompt  システムプロンプト。LLM の役割とツール利用の指針を定義する。
+  * @param baseUrl        LLM API のベース URL。環境変数 `LLM_BASE_URL` から取得。
+  * @param model          モデル名。環境変数 `LLM_MODEL` から取得。
+  * @param maxTokens      1回の API 呼び出しの最大トークン数。4096 以上を推奨（thinking mode 対策）。
+  * @param maxToolRounds  ツール呼び出しラウンドの上限。無限ループ防止ガード。
+  * @param temperature    生成時の temperature。0.0 で確定的出力。
+  * @param timeoutSeconds API 呼び出しのタイムアウト秒数。
+  * @param promptSections SystemPrompt のセクションリスト。[[Prompts]] の定数を組み合わせる。
+  *                       `def systemPrompt` で `"\n\n"` 区切りの文字列に結合される。
   */
 case class AgentConfig(
     baseUrl: String = sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1"),
     model: String = sys.env.getOrElse("LLM_MODEL", "local"),
     maxTokens: Int = 4096,
     maxToolRounds: Int = 5,
-    systemPrompt: String = "あなたは日本法に関するアシスタントです。" +
-      "ユーザの質問に答えるために、必要に応じてツールを使ってください。" +
-      "ツールが不要な質問にはツールを使わずに直接回答してください。"
-)
+    temperature: Double = 0.0,
+    timeoutSeconds: Int = 120,
+    promptSections: List[String] = List(Prompts.Role)
+) {
+  /** プロンプトセクションを結合したシステムプロンプト文字列。 */
+  def systemPrompt: String = promptSections.mkString("\n\n")
+}
 
 /** [[AgentLoop.runTurn]] の実行結果。
   *
@@ -90,34 +91,13 @@ object AgentLoop {
     var totalTokens = 0
 
     for (round <- 0 until config.maxToolRounds) {
-      val body = Json.obj(
-        "model" -> Json.fromString(config.model),
-        "messages" -> Json.arr(currentMessages.map(ChatMessage.toJson)*),
-        "tools" -> ToolDispatch.toolDefs,
-        "max_tokens" -> Json.fromInt(config.maxTokens),
-        "temperature" -> Json.fromDoubleOrNull(0.0)
-      )
+      val llmResp = LlmClient.chatCompletion(currentMessages, config, tools = Some(ToolDispatch.toolDefs))
+      totalTokens += llmResp.totalTokens
 
-      val backend = DefaultSyncBackend()
-      val resp = basicRequest
-        .post(uri"${config.baseUrl}/chat/completions")
-        .contentType("application/json")
-        .body(body.noSpaces)
-        .response(asString)
-        .readTimeout(scala.concurrent.duration.Duration(120, "s"))
-        .send(backend)
-      backend.close()
-
-      val respJson = parse(resp.body.getOrElse("{}")).getOrElse(Json.Null)
-      val choiceMsg = respJson.hcursor
-        .downField("choices").downArray.downField("message").focus.getOrElse(Json.Null)
-      val usage = respJson.hcursor.downField("usage").downField("total_tokens").as[Int].getOrElse(0)
-      totalTokens += usage
-
-      val assistantMsg: ChatMessage.Assistant = ChatMessage.fromJson(choiceMsg) match {
+      val assistantMsg: ChatMessage.Assistant = ChatMessage.fromJson(llmResp.message) match {
         case Some(a: ChatMessage.Assistant) => a
         case _ => ChatMessage.Assistant(
-          choiceMsg.hcursor.downField("content").as[String].toOption,
+          llmResp.message.hcursor.downField("content").as[String].toOption,
           Nil
         )
       }

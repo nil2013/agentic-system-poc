@@ -19,7 +19,8 @@
 ### 0.2 推論サーバ側の現状
 
 - **llama.cpp**: git clone → cmake ビルド済み。llama-server が利用可能
-- **導入済みモデル**: `Qwen3.5-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf` (~20GB)
+- **推奨モデル（GPU WS）**: Unsloth 版公式 instruct GGUF。`unsloth/Qwen3.5-35B-A3B-GGUF` の Q4_K_M (22.0GB) または UD-Q4_K_XL (22.2GB)。"Uncensored" 派生モデルは tool calling の学習分布からずれるため学習目的には不適（§0.3 項3 参照）
+- **推奨モデル（Mac ローカル）**: `mlx-community/Qwen3.5-9B-MLX-8bit` (10.4GB)。mlx-lm サーバー経由。**9B モデルでは thinking mode を無効にすること**（§0.3 項7 参照）
 
 ### 0.3 重大な技術的前提: Qwen3.5 + llama.cpp のtool calling互換性
 
@@ -33,9 +34,16 @@
 
 4. **llama-serverの起動には `--jinja` フラグが必須**: tool calling対応のためにはJinjaテンプレートエンジンを有効化する必要がある。なお、llama.cppのfunction calling公式ドキュメントでQwen3.5はネイティブサポートとしてリストされていない（Qwen 2.5まで）。Qwen3.5はGenericフォーマットハンドラにフォールバックする可能性があり、その場合トークン消費が増える。
 
-5. **コンテキストウィンドウの実効制限**: Qwen3.5-35B-A3Bは262Kトークンのコンテキストをサポートするが、32GB VRAMに~20GBのモデルを載せると残り~12GBがKVキャッシュに使える。MoEモデルは全expertの重みがVRAMに常駐するため、実効コンテキストは数千〜数万トークン程度と見積もるべきである。llama-serverの `-c` パラメータで明示的に制限する（推奨: 8192〜16384から開始）。
+5. **コンテキストウィンドウの実効制限**: Qwen3.5-35B-A3Bは262Kトークンのコンテキストをサポートするが、32GB VRAMに~20GBのモデルを載せると残り~12GBがKVキャッシュに使える。MoEモデルは全expertの重みがVRAMに常駐するため、実効コンテキストは数千〜数万トークン程度と見積もるべきである。llama-serverの `-c` パラメータで明示的に制限する（推奨: 16384。Qwen3.5-9B はハイブリッドアーキテクチャにより KV キャッシュが通常の 1/4 程度で済むため、8192 でも実用上問題ない場合がある）。
 
-6. **Qwen3.5 の Thinking Mode（実験時の追記）**: Qwen3.5 はデフォルトで thinking mode が有効であり、レスポンスの `reasoning_content` フィールドに思考過程を出力する。thinking は ~1500-2000 tokens を消費するため、`max_tokens` が不足すると `content`（実際の回答）が空になる。構造化出力や tool calling を行う場合は `max_tokens` を十分大きく設定すること（4096 以上を推奨）。なお、llama-server 経由での `/no_think` による thinking 無効化は動作しない場合がある（2026-03-23 時点で確認）。
+6. **Qwen3.5 の Thinking Mode**: Qwen3.5 ファミリー全体でデフォルトで thinking mode が有効であり、レスポンスの `reasoning_content` フィールドに思考過程を出力する。本ガイドの全ステージに影響する重要な前提:
+
+   - **`max_tokens` への影響**: thinking は ~1500-2000 tokens を消費する。`max_tokens` が不足すると、thinking だけで予算を使い切り `content`（実際の回答）が空になる。全ステージで `max_tokens` を **4096 以上** に設定すること
+   - **thinking tokens は蓄積しない**: `reasoning_content` は API レスポンスに含まれるが、次のリクエストの messages には含まれない。つまり thinking tokens はターンごとに消費されるが、会話履歴には蓄積しない（Stage 4 のコンテキスト管理にとって好都合）
+   - **`/no_think` は llama-server 経由で効かない場合がある**（2026-03-23 時点で確認）
+   - **Stage 7 では thinking ブロックの内容を分析対象とする**（`stages/stage7/PLAN.md` 参照）
+
+7. **9B モデルと thinking mode の相性問題**: Qwen3.5-9B（dense）で thinking mode を有効にすると、35B-A3B とは逆に**性能が大幅に劣化する**ことが報告されている（推論速度 ~20倍低下、tool calling 精度 ~1/4）。9B モデルを Mac ローカルで使用する場合は **thinking mode を無効にすること**を強く推奨する。35B-A3B（MoE, GPU WS）では thinking-on で安定動作する。
 
 **→ Stage 0の最初のタスクとして、これらの前提条件の検証を行う。**
 
@@ -117,10 +125,10 @@ cmake --build build --config Release -j$(nproc)
 ```bash
 # GPU WS側: tool calling対応で起動
 ./build/bin/llama-server \
-  -m /data/models/llm-models/Qwen3.5-35B-A3B-Uncensored-HauhauCS-Aggressive-Q4_K_M.gguf \
+  -m <path-to-model>/Qwen3.5-35B-A3B-Q4_K_M.gguf \
   --host 0.0.0.0 --port 8080 \
   -ngl 99 \
-  -c 8192 \
+  -c 16384 \
   --jinja \
   -fa on
 ```
@@ -128,7 +136,7 @@ cmake --build build --config Release -j$(nproc)
 **パラメータの意味:**
 
 - `-ngl 99`: 全レイヤをGPUにオフロード
-- `-c 8192`: コンテキスト長を8192トークンに制限（VRAM節約。後で拡大可能）
+- `-c 16384`: コンテキスト長を16384トークンに制限（thinking mode の消費分を含めた余裕を確保。Qwen3.5-9B のハイブリッドアーキテクチャでは KV キャッシュが小さいため 8192 でも可）
 - `--jinja`: Jinjaテンプレートエンジンを有効化（Stage 2以降のtool callingに必須）
 - `-fa on`: Flash Attention有効化（メモリ効率向上。`on`/`off`/`auto` から選択）
 
@@ -506,6 +514,8 @@ def evaluate(result: ArticleInfo, truth: ArticleInfo): Map[String, Boolean] = {
 | JSON mode (B) | JSON解析成功率100%。ただしスキーマに従わないフィールド名や構造のずれは起こりうる |
 | JSON Schema (C) | JSON解析成功率100%、スキーマ準拠率100%。ただしレイテンシがA/Bより増加する可能性あり |
 
+> **注**: 上記の失敗パターンは、モデルサイズ・thinking mode の有無・temperature によって顕在化の度合いが変わる。35B-A3B（thinking-on, temperature=0.0）では全手法で成功率 100% が観察されうる（天井効果）。4B クラスや 9B（thinking-off）では差が出やすい。
+
 ### 1.8 追加実験: 複数条文での信頼性検証
 
 民法709条だけでなく、構造が異なる条文でも試す。
@@ -831,12 +841,19 @@ def runAgentPromptBased(userQuery: String): String = {
 | 3 | 「不法行為の損害賠償請求の根拠条文は？」 | ツール呼び出し（709条）→取得→説明 |
 | 4 | 「刑法の殺人罪は何条ですか？条文も示してください」 | ツール呼び出し（199条）→取得→提示 |
 | 5 | 「民法1条と709条の両方を見せてください」 | 2回のツール呼び出し |
+| 6 | 「皇族に対する尊崇義務に関する法律の第1条を教えてください」 | ツール呼び出し→**エラー**（非実在法令）→ エラーをユーザーに伝える |
+| 7 | 「消費者契約法の第1条を見せてください」 | ツール呼び出し→ **結果は環境依存**（KnownLaws に未登録の場合はエラー） |
+
+テスト #6, #7 はツールが否定結果（エラー）を返した場合のモデルの動作を検証する。特に #6 は非実在の法令を問い合わせるため、ツールがエラーを返すことが確実であり、モデルが「エラーをそのままユーザーに伝えるか、内部知識で補完するか」を観察できる。
+
+> **「静かなフォールバック」問題**: ツールがエラーを返した場合にモデルが内部知識で条文テキストを生成して回答する現象。法学ドメインでは出典の偽装に繋がるため危険。SystemPrompt に「ツールがエラーを返した場合は、エラーをそのままユーザーに伝え、内部知識で代替回答しないこと」を追加することで制御を試みる。効果の検証は Stage 6 で行う。
 
 ### 2.6 Stage 2の成果物
 
 - パスA/Bのどちらが安定動作したかの記録
-- 5問のテスト結果
+- 7問のテスト結果（うち #6, #7 はネガティブケース）
 - tool callingで遭遇した問題とワークアラウンドの記録
+- ツールエラー時のモデル動作の観察（「静かなフォールバック」の有無）
 
 ---
 
@@ -891,24 +908,27 @@ object LawListSearch {
 }
 
 object Arithmetic {
+  /** 安全な四則演算。再帰下降パーサで実装。
+    * JDK 17+ では Nashorn (javax.script の JS エンジン) が削除されているため、
+    * 自前のパーサが必要。文法: expr = term (('+' | '-') term)* / term = factor (('*' | '/') factor)* / factor = number | '(' expr ')' | '-' factor
+    */
   def calculate(expression: String): String = {
-    // 安全な四則演算のみ。javax.script.ScriptEngineは使わない。
+    val sanitized = expression.replaceAll("[^0-9.+\\-*/() ]", "")
+    if (sanitized != expression.trim) {
+      return s"エラー: 許可されていない文字が含まれています"
+    }
     try {
-      // 簡易パーサ: 数値と+-*/のみ許可
-      val sanitized = expression.replaceAll("[^0-9.+\\-*/() ]", "")
-      if (sanitized != expression.trim) {
-        return s"エラー: 許可されていない文字が含まれています"
-      }
-      // scala.util.Tryでの簡易eval（注: 本番コードではパーサを書くべき）
-      val result = new javax.script.ScriptEngineManager().getEngineByName("js") match {
-        case null => "エラー: 計算エンジンが利用できません"
-        case engine => engine.eval(sanitized).toString
-      }
-      result
+      val tokens = tokenize(sanitized)
+      val (result, rest) = parseExpr(tokens)
+      if (rest.nonEmpty) s"エラー: 解析できない部分: ${rest.mkString}"
+      else result.toString
     } catch {
       case e: Exception => s"計算エラー: ${e.getMessage}"
     }
   }
+
+  // tokenize / parseExpr / parseTerm / parseFactor の実装は
+  // src/main/scala/tools/Arithmetic.scala を参照
 }
 ```
 
@@ -982,9 +1002,22 @@ def messageToJson(msg: ChatMessage): Json = msg match {
 
 ## Stage 4: 状態管理と会話履歴
 
-**獲得する概念:** agentic loopにおける状態管理の設計パターン。コンテキストウィンドウの有限性がアーキテクチャを規定すること。
+**獲得する概念:** agentic loop における状態管理の設計パターン。コンテキストウィンドウの有限性が「入力選択問題」を生むこと。
+
+> **sbt プロジェクト移行のマイルストーン**: Stage 4 からは複数ファイル・テスト・ADT が必要になるため、scala-cli から sbt プロジェクトに移行する。`src/main/scala/` にパッケージを切り、Stage 3 の ADT 化（§3.3）もここで実施する。
 
 **所要時間:** 1〜2日
+
+### 4.0 アーキテクチャ概念: 入力選択問題
+
+Stage 4 の本質は「KV キャッシュの管理」ではなく、**入力選択問題**（Input Selection Problem）である。会話履歴は永続化されるが、LLM のコンテキストウィンドウは有限（`-c 16384` 等）であるため、毎回のリクエストで「どのメッセージを含めるか」を選択する必要がある。
+
+3層の構造:
+1. **永続化層** (Persistence): 全メッセージを JSON ファイルに保存・復元
+2. **選択層** (Selection): 保存された履歴のうち、次のリクエストのトークン予算に収まる部分を選ぶ
+3. **送信層** (Transport): 選択されたメッセージを API リクエストに変換して送信
+
+**注意**: thinking tokens は `reasoning_content` として返却されるが、次のリクエストの messages には含まれない（§0.3 項6 参照）。つまり thinking tokens は選択層のスコープ外であり、永続化する必要もない。
 
 ### 4.1 セッション永続化
 
@@ -1039,18 +1072,33 @@ class ConversationState(sessionId: String) {
 
 - `estimateTokens` の推移
 - ツール呼び出し結果（条文テキスト等）によるトークン数の急増
-- `-c 8192` のコンテキスト制限に近づいたときのllama-serverの挙動
+- コンテキスト制限に近づいたときのllama-serverの挙動
 - `truncateIfNeeded` による古いメッセージ削除の対話品質への影響
 
-### 4.3 研究との接続
+### 4.3 段階的な圧縮戦略
 
-会話履歴の「要約時に何が失われるか」は、基盤Cの「矮小化」概念と構造的に相似している。
+Stage 4 では単純な切り詰め（FIFO 削除）を実装するが、より高度な圧縮戦略を段階的に検討する:
 
-### 4.4 Stage 4の成果物
+1. **切り詰め（truncation）**: 古いメッセージを削除。実装は容易だが、重要な文脈が失われる
+2. **要約ベースの圧縮**: 古いメッセージを LLM に要約させて短いメッセージに置き換える。要約自体に LLM 呼び出しが必要（レイテンシ増）
+3. **Stage 6 での比較**: 切り詰め版と要約版の対話品質を評価基準で定量比較
+4. **損失分析**: 要約時に「何が失われるか」を分析（研究との接続点）
+
+### 4.4 ツール取得データの除外原則
+
+要約や切り詰めにおいて、**再取得可能な情報は保持しない**。具体的には:
+
+- **保持しない**: 条文テキスト（`get_article` で再取得可能）、法令一覧（`find_laws` で再取得可能）、計算結果（`calculate` で再計算可能）
+- **保持する**: ユーザーの意図・目的、議論の流れ、結論・判断、ツール呼び出しの事実（何を呼んだか）
+
+この原則により、要約のトークン効率が大幅に向上する。「民法709条の全文」を要約に含める必要はなく、「民法709条を参照した」という事実だけ残せば十分である。
+
+### 4.5 Stage 4の成果物
 
 - セッション保存・復元が動作する対話エージェント
-- コンテキスト使用量の推移ログ
+- コンテキスト使用量の推移ログ（10ターン分）
 - 切り詰め方式のトレードオフ検討メモ
+- 会話ログ（`ConversationLogger` による markdown 出力）
 
 ---
 
@@ -1135,6 +1183,7 @@ case class Evaluation(
     source_cited: Boolean,
     internally_consistent: Boolean,
     answers_question: Boolean,
+    tool_result_consistent: Boolean,
     issues: List[String]
 )
 
@@ -1145,12 +1194,18 @@ val EvaluatorPrompt = """|あなたは法律情報の品質検証者です。
   |1. source_cited: 回答中に具体的な条文番号が引用されているか (true/false)
   |2. internally_consistent: 回答内で矛盾する記述がないか (true/false)
   |3. answers_question: 元の質問に対する直接的な回答が含まれているか (true/false)
-  |4. issues: 問題点があれば列挙 (配列。なければ空配列)
+  |4. tool_result_consistent: ツールが否定結果（エラー）を返した場合、
+  |   回答がその否定結果と整合しているか。ツールがエラーを返したのに
+  |   具体的な条文内容が回答に含まれている場合は false (true/false)
+  |5. issues: 問題点があれば列挙 (配列。なければ空配列)
   |
   |JSONのみ出力:
-  |{"source_cited":true,"internally_consistent":true,"answers_question":true,"issues":[]}
+  |{"source_cited":true,"internally_consistent":true,"answers_question":true,
+  | "tool_result_consistent":true,"issues":[]}
   |""".stripMargin
 ```
+
+`tool_result_consistent` は §2.5 で導入した「静かなフォールバック」問題に対するプログラム的な検出基準である。`source_cited` が条文番号の存在だけをチェックするのに対し、`tool_result_consistent` はツールの否定結果と回答内容の整合性を検証する。例えば、ツールが「法令が見つかりません」と返したのに回答に条文テキストが含まれている場合、これは内部知識によるフォールバックであり `false` とする。
 
 ### 6.3 修正ループ
 
@@ -1200,29 +1255,70 @@ def runWithSelfEval(query: String, maxRetries: Int = 3): String = {
 
 ---
 
-## Stage 7（応用）: 研究タスクへの接続
+## Stage 7: Thinking/Reasoning ブロックの観察・分析
 
-Stage 0〜6で獲得した概念を組み合わせて、実際の研究タスクに取り組む段階。
+**獲得する概念:** LLM の内部推論過程（thinking ブロック）を観察・分析し、モデルの判断メカニズムを理解する。
 
-### 7.1 接続可能な研究タスク
+**所要時間:** 1〜2日
 
-| タスク | 主に使うStageの概念 | 追加で必要なもの |
-|--------|-------------------|----------------|
-| **C-ε: Agentic Legal Research** | Stage 2-5（ツール、計画） | 判例DB検索ツール、より高品質なモデル |
-| **D-δ: 法的三段論法のCoT検証** | Stage 6（評価ループ） | 形式検証（Dung's framework）との接続 |
-| **E-β: 判例要約の矮小化評価** | Stage 4（何が失われるか） | 判例テキストデータ、評価指標の設計 |
+### 7.1 目的
 
-### 7.2 sttp-openaiへの移行検討
+Stage 0-6 では「LLM が何をするか」を観察してきた。Stage 7 では「LLM が何を考えているか」を分析する。Qwen3.5 の `reasoning_content` をキャプチャし、以下を調べる:
 
-Stage 7以降では、自前のJSON組み立てから `sttp-openai` (`com.softwaremill.sttp.openai::core:0.3.6`) への移行を検討してもよい。同ライブラリはOpenAI互換エンドポイント（llama-server含む）に対応しており、tool calling、structured output、streamingを型安全に扱える。Stage 0-6で内部構造を理解しているので、ライブラリの抽象化が何を隠しているかを把握した上で使える。
+- **ツール選択の推論過程**: どのような思考経路でツールを選ぶか
+- **「静かなフォールバック」の内部メカニズム**: ツールがエラーを返した場合に「エラーを伝える」vs「内部知識で補完する」を選ぶ判断ロジック
+- **thinking の有用性**: thinking が実際に回答品質に貢献しているか、冗長な反芻が多いか
 
-### 7.3 sbtプロジェクトへの移行
+### 7.2 実装
 
-Stage 7以降でコードが複数ファイルに成長した場合、scala-cliの単一ファイル実行から sbt プロジェクトに移行する。scala-cliの `export` コマンドでsbtプロジェクトを生成できる。
+1. `ChatMessage.Assistant` に `reasoning: Option[String]` フィールドを追加
+2. `ChatMessage.fromJson` で `reasoning_content` を読み取り
+3. `ConversationLogger` に thinking セクションを追加
+4. Stage 0-6 のテストケースを再実行して thinking ブロックを収集
 
-```bash
-scala-cli export --sbt stage3_routing.scala
-```
+### 7.3 分析観点
+
+- ツール選択の推論パターン（正しい判断 vs 誤った判断）
+- thinking tokens の消費パターンとタスク難易度の関係
+- SystemPrompt / tool description の改善にフィードバックできる知見の抽出
+
+### 7.4 Stage 7の成果物
+
+- thinking ブロックの収集データ
+- 分析レポート
+- （任意）SystemPrompt / tool description の改善提案
+
+> **注**: 研究タスクへの応用（判例DB検索、法的三段論法のCoT検証等）は本ガイドのスコープ外。別プロジェクトで本格開発する。
+
+---
+
+## Stage 8: REPL 実装と統合
+
+**獲得する概念:** Stage 0-7 で構築した全コンポーネントを統合し、対話的に利用できる REPL を実装する。統合そのものが学習目標。
+
+**所要時間:** 1〜2日
+
+### 8.1 設計の意図
+
+Stage 4 で 10 クエリを事前定義して実行したが、実際のユースケースでは対話的な探索が求められる。REPL を最終ステージに配置する理由:
+
+- Stage 5-7 の概念（計画、自己評価、thinking 分析）を REPL のどこに組み込むかという**統合設計の判断**が学習目標になる
+- Stage 4 に REPL を置くと、Stage 5-7 の概念を暗黙に「使ってしまう」ため、後のステージが形式化に感じられる
+
+### 8.2 設計判断ポイント
+
+REPL 実装で直面する設計判断:
+
+- **計画層の呼び出しタイミング**: 複雑なクエリを検出して自動的に計画を立てるか、ユーザーが明示的に指示するか
+- **自己評価の頻度**: 全回答に評価をかけるか、特定条件（ツールエラー発生時等）のみか
+- **thinking ブロックの UI 表示**: 非表示（デフォルト）/ 要約表示 / 全文表示の切替
+- **セッション管理**: 新規 / 継続 / 一覧の UI
+
+### 8.3 Stage 8の成果物
+
+- 対話的 REPL の実装
+- Stage 0-7 のコンポーネント統合
+- 統合設計の判断記録
 
 ---
 
@@ -1272,14 +1368,19 @@ Stage 0 (疎通・基盤)
        └→ Stage 2 (単一ツール)
             └→ Stage 3 (複数ツール + ADT化)
             |    └→ Stage 5 (計画)
-            └→ Stage 4 (状態管理)
-                 └→ Stage 6 (自己評価)
+            └→ Stage 4 (状態管理, sbt移行)
+            |    └→ Stage 6 (自己評価)
+            └→ Stage 7 (Thinking分析)
+                 └→ Stage 8 (REPL統合)
 ```
 
 - Stage 0, 1, 2 は省略不可。基盤であり、後続のすべてに影響する。
 - Stage 3 は Stage 2 の拡張。メッセージ型のADT化はここで行う。
+- **Stage 3→4 の間に sbt プロジェクト移行のマイルストーンがある**。
 - Stage 4 と Stage 5 は独立。どちらを先に取り組んでもよい。
 - Stage 6 は Stage 2-5 のいずれかのエージェントが動作していることが前提。
+- Stage 7 は独立。thinking ブロックが取得できる環境があれば Stage 4 以降いつでも実施可能。
+- Stage 8 は全ステージの統合。Stage 5-7 完了後に実施。
 
 ---
 
@@ -1294,8 +1395,10 @@ Stage 0 (疎通・基盤)
 | 4 | 1-2日 | 状態管理の設計判断が入るため |
 | 5 | 1-2日 | planning戦略の比較実験 |
 | 6 | 1日 | evaluatorの設計 |
+| 7 | 1-2日 | thinking ブロック収集・分析 |
+| 8 | 1-2日 | REPL 実装・全コンポーネント統合 |
 
-合計で1-2週間。各ステージの間に振り返りの時間を取ることを推奨する。
+合計で2-3週間。各ステージの間に振り返りの時間を取ることを推奨する。
 
 ---
 
@@ -1311,3 +1414,14 @@ Stage 0 (疎通・基盤)
 | 2026-03-23 | §0.3 に Qwen3.5 thinking mode の注意点を追記 | Stage 1 で `max_tokens=1024` だと content が空になる問題 |
 | 2026-03-23 | §1.7 GroundTruth の caption を括弧付きに修正 + 設計注意点を追記 | Stage 1 実験で ground truth 側のバグが判明 |
 | 2026-03-23 | §3.1 に searchStatute 全法令対応の注記を追記、§5.1 に前提条件の注記を追記 | Stage 4 実験で findLawByKeyword → searchStatute パイプラインの断絶が判明。ガイドの Stage 5 タスク設計が動かない |
+| 2026-03-24 | §0.2 モデル推奨を公式 instruct 版に変更 | R-01: Uncensored 派生モデルのパス例を排除 |
+| 2026-03-24 | §0.3 thinking mode セクション拡充 + 9B thinking-off 注記（項7 新設）| R-02, R-09: thinking mode が全ステージの前提に影響 |
+| 2026-03-24 | §0.3 `-c` 推奨値を 8192 → 16384 に変更 | R-09: thinking 消費分を含めた余裕確保 |
+| 2026-03-24 | §2.5 ネガティブテストケース #6, #7 追加 + 静かなフォールバック解説 | R-03b: テスト設計の欠陥 |
+| 2026-03-24 | §3.1 Arithmetic コード例を再帰下降パーサに差し替え | R-11: javax.script の矛盾（「使わない」宣言と使用が共存） |
+| 2026-03-24 | §4.0 アーキテクチャ概念（入力選択問題）新設、§4.3 段階的圧縮、§4.4 除外原則 | R-04, R-05, R-06: Stage 4 の概念修正と設計指針追加 |
+| 2026-03-24 | §4 冒頭に sbt 移行マイルストーン注記 | R-12: 移行タイミングの明示化 |
+| 2026-03-24 | §6.2 に `tool_result_consistent` 評価基準を追加 | R-07: 静かなフォールバックのプログラム的検出 |
+| 2026-03-24 | §7 を Thinking 分析に全面差替、§8 REPL 実装を新設 | R-08, R-13: カリキュラム構造の変更 |
+| 2026-03-24 | §1.7 予想テーブルに条件付き注記を追加 | R-10: 失敗パターンの条件依存性 |
+| 2026-03-24 | 付録B 依存関係図 + 付録C 所要時間に Stage 7-8 追加 | R-08, R-13: 新ステージ反映 |

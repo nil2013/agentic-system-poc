@@ -83,6 +83,12 @@ mlx_lm.server --model mlx-community/Qwen3.5-9B-MLX-8bit --port 8000
 詳細な実装手順は `docs/guide/agentic-system-learning-guide-scala.md`（メイン）を参照。
 Python 版の `docs/guide/agentic-system-learning-guide.md` は参考資料として残す。
 
+### ガイドの運用方針
+
+- **学習ガイド本体**（`agentic-system-learning-guide-scala.md`）は原則として静的文書。修正は設計上のバグ・環境前提の誤りに限定し、実験結果からの逆算は行わない（`stages/PROTOCOL.md` §4.2 参照）
+- **発展的学習ガイド**（`docs/guide/advanced-topics.md`）は動的文書。各ステージの実験・調査中に発見された発展的課題を逐次記録・昇華させていく。本体ガイドが「基礎概念の獲得」、発展ガイドが「深掘りと応用」
+- **調査レポート**（`docs/research/`）は実験・調査のスナップショット。発展ガイドの根拠となるデータ
+
 ## Language Strategy
 
 - **Stage 0–2**: Scala 3 + scala-cli（スクリプト実行、sbt 不要）

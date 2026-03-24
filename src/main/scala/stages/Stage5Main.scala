@@ -174,7 +174,8 @@ object Stage5Main {
     println(s"LLM_BASE_URL = ${baseConfig.baseUrl}")
     println()
 
-    val logger = new ConversationLogger(Paths.get("stages/stage5/conversation-log.md"))
+    val logFile = sys.env.getOrElse("STAGE5_LOG", "stages/stage5/conversation-log.md")
+    val logger = new ConversationLogger(Paths.get(logFile))
     logger.header("Stage 5: Planning Comparison Log", baseConfig)
 
     // === Part 1: Plan-then-Execute ===

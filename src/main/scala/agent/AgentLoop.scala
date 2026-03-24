@@ -41,7 +41,8 @@ case class AgentConfig(
 case class TurnResult(
     response: ChatMessage.Assistant,
     toolCalls: List[String],
-    totalTokens: Int
+    totalTokens: Int,
+    reasoning: Option[String] = None
 )
 
 /** ReAct パターンのエージェントループ。
@@ -123,7 +124,7 @@ object AgentLoop {
 
       if (assistantMsg.toolCalls.isEmpty) {
         currentMessages = currentMessages :+ assistantMsg
-        val result = TurnResult(assistantMsg, toolCallLog, totalTokens)
+        val result = TurnResult(assistantMsg, toolCallLog, totalTokens, assistantMsg.reasoning)
         return (result, currentMessages)
       }
 

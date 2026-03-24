@@ -226,7 +226,8 @@ object Stage6Main {
     println(s"LLM_BASE_URL = ${generatorConfig.baseUrl}")
     println()
 
-    val logger = new ConversationLogger(Paths.get("stages/stage6/conversation-log.md"))
+    val logFile = sys.env.getOrElse("STAGE6_LOG", "stages/stage6/conversation-log.md")
+    val logger = new ConversationLogger(Paths.get(logFile))
     logger.header("Stage 6: Self-Evaluation Loop Log", generatorConfig)
 
     var allRounds = Map.empty[String, List[EvalRound]]

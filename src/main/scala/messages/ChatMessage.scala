@@ -45,7 +45,7 @@ case class ToolCallInfo(id: String, name: String, arguments: JsonObject)
 enum ChatMessage {
   case System(content: String)
   case User(content: String)
-  case Assistant(content: Option[String], toolCalls: List[ToolCallInfo])
+  case Assistant(content: Option[String], toolCalls: List[ToolCallInfo], reasoning: Option[String] = None)
   case ToolResult(toolCallId: String, content: String)
 }
 
@@ -62,7 +62,7 @@ object ChatMessage {
       Json.obj("role" -> Json.fromString("system"), "content" -> Json.fromString(c))
     case ChatMessage.User(c) =>
       Json.obj("role" -> Json.fromString("user"), "content" -> Json.fromString(c))
-    case ChatMessage.Assistant(content, toolCalls) if toolCalls.nonEmpty =>
+    case ChatMessage.Assistant(content, toolCalls, _) if toolCalls.nonEmpty =>
       Json.obj(
         "role" -> Json.fromString("assistant"),
         "content" -> content.map(Json.fromString).getOrElse(Json.Null),
@@ -77,7 +77,7 @@ object ChatMessage {
           )
         }*)
       )
-    case ChatMessage.Assistant(content, _) =>
+    case ChatMessage.Assistant(content, _, _) =>
       Json.obj(
         "role" -> Json.fromString("assistant"),
         "content" -> Json.fromString(content.getOrElse(""))
@@ -115,7 +115,8 @@ object ChatMessage {
             args <- io.circe.parser.parse(argsStr).flatMap(_.as[JsonObject]).toOption
           } yield ToolCallInfo(id, name, args)
         }
-        Some(ChatMessage.Assistant(content, toolCalls))
+        val reasoning = c.downField("reasoning_content").as[String].toOption
+        Some(ChatMessage.Assistant(content, toolCalls, reasoning))
       case "tool" =>
         for {
           id <- c.downField("tool_call_id").as[String].toOption

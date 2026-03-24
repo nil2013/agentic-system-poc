@@ -75,6 +75,20 @@ class ConversationLogger(outputPath: Path) {
     sb.append("---\n\n")
   }
 
+  /** thinking ブロックを記録する（Stage 7 の分析用）。
+    *
+    * GitHub markdown の details/summary で折りたたみ表示にする。
+    */
+  def thinkingBlock(reasoning: String): Unit = {
+    val charCount = reasoning.length
+    sb.append(s"\n<details><summary>Thinking ($charCount chars)</summary>\n\n")
+    sb.append(s"${reasoning.take(2000)}\n")
+    if (reasoning.length > 2000) {
+      sb.append(s"\n*... (truncated, total $charCount chars)*\n")
+    }
+    sb.append(s"\n</details>\n\n")
+  }
+
   /** セッション全体のサマリーを記録する。 */
   def summary(totalMessages: Int, estChars: Int): Unit = {
     sb.append(s"## Summary\n\n")

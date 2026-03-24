@@ -141,24 +141,25 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 
 ## Instant Handover (DELETE AFTER READING)
 
-> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-23_session.md` をサブエージェントで参照。
+> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-24_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **Stage 0-4 完了**（推論疎通 → 構造化出力 → 単一ツール → 複数ツール → 状態管理）
-- sbt プロジェクト移行 + ChatMessage ADT 化（Stage 4 で実施）
-- ConversationLogger 追加（Stage 4+ で会話ログを自動記録）
-- mlx-lm バックエンド追加、量子化戦略調査（8-bit 採用）
-- Stage 実行プロトコル策定 + 定性的分析方針追加
+- **Stage 0-5 完了**（推論疎通 → 構造化出力 → 単一ツール → 複数ツール → 状態管理 → 計画と分解）
+- ガイド包括的改訂（R-01〜R-13、13項目。改訂提案は `docs/guide/guide-revision-proposal.md`）
+- Planning アーキテクチャ文献調査（`docs/research/2026-03-24_planning-architectures-survey.md`）
+- 発展的学習ガイド策定（`docs/guide/advanced-topics.md`）
+- Scaladoc 整備 + HTML/Markdown コードドキュメント
 
 ### 主な知見
-- **Stage 1-4 で一貫した天井効果**: ツール選択・構造化出力ともに完璧。品質問題はツールエラー時のフォールバック動作に移行
-- **「静かなフォールバック」**: ツールがエラーを返してもモデルが内部知識で補完する。法学ドメインでは出典偽装リスク。制御が必要
-- Thinking mode が max_tokens を消費 → 4096 に引き上げ。thinking tokens は蓄積しない（好都合）
+- **Stage 1-4 で一貫した天井効果**: ツール選択・構造化出力ともに完璧
+- **Plan-then-Execute は全滅**: 依存引数の解決不能。Adaptive（ReAct型）が完璧に動作
+- **SystemPrompt 制御で静かなフォールバックを抑制**: 1行追加でエラー報告の誠実さを確保。ただし内部知識の完全排除は困難（推測として漏出）
+- **9B + thinking-on は性能劣化**: 推論速度 ~20倍低下、精度 ~1/4（ユーザー報告）。9B は thinking-off 推奨
 
 ### 次のアクション（優先順）
-1. Stage 5（計画と分解）の実施
-2. 「静かなフォールバック」の制御（SystemPrompt での試行）
-3. Q6_K vs Q4_K_M 精度比較（天井効果により難しいタスクで検証する方が有効か検討）
+1. Stage 6（自己評価と修正ループ）の実施
+2. SystemPrompt 制御を AgentConfig デフォルトに組み込む
+3. `tool_result_consistent` 基準の実装・検証
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

@@ -27,4 +27,8 @@ lazy val root = project
       "-feature",
       "-unchecked",
     ),
+
+    // REPL (Stage 8): sbt 経由で stdin を読むために必要
+    run / fork := true,
+    run / connectInput := true,
   )

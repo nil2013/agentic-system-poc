@@ -3,6 +3,7 @@
 > 作成日: 2026-03-23
 > 対象: `src/main/scala/tools/` パッケージ
 > API 仕様: `docs/egov-api/houreiapi_shiyosyo.pdf`, `docs/egov-api/hourei-api-v1-rest-spec.md`
+> **実装状況**: 本設計に基づき実装済み。旧 `StatuteSearch.scala`, `LawListSearch.scala` は削除済み。また、HTTP 呼び出しは `agent/LlmClient.scala` に統合、SystemPrompt は `agent/Prompts.scala` に集約された。
 
 ---
 

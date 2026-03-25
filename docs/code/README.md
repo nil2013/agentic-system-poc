@@ -68,8 +68,8 @@ graph TB
 
 ```
 src/main/scala/
-├── messages/     ChatMessage ADT + JSON codecs
-├── agent/        AgentLoop, ConversationState, ConversationLogger
+├── messages/     ChatMessage ADT + JSON codecs（reasoning フィールド対応）
+├── agent/        AgentLoop, ConversationState, ConversationLogger, LlmClient, Prompts
 ├── tools/        ToolDispatch, Arithmetic
 │   └── egov/     e-Gov API クライアント (5ファイル)
 └── stages/       Stage ごとのエントリポイント
@@ -115,7 +115,11 @@ enum ChatMessage {
 
 > **トークン推定:** `estimateTokens` は JSON 文字列の文字数を数えるヒューリスティックです。実際のトークン数とは 3-4 倍のずれがあります。パラメータ名 `maxTokens` は misnomer（実態は文字数）です。
 
-**ConversationLogger** は会話ログを Markdown 形式で生成します。RESULTS.md の Discussion セクションでの定性的分析に使用されます（`stages/PROTOCOL.md` §4.1.1 参照）。
+**ConversationLogger** は会話ログを Markdown 形式で生成します。`thinkingBlock` メソッドで reasoning ブロックを `<details>` 折りたたみで記録します。
+
+**LlmClient** は OpenAI Chat Completions API 互換の共有 HTTP クライアントです。AgentLoop、Stage5 の計画生成、Stage6 の evaluator など、LLM API を呼び出す全箇所がこのクライアントを経由します。`chatCompletion`（フルレスポンス）と `contentOnly`（content 文字列のみ）の2メソッドを提供。
+
+**Prompts** は SystemPrompt のセクション定数を提供します。`AgentConfig.promptSections` に必要なセクション（`Prompts.Role`, `Prompts.FallbackControl` 等）を列挙する形で構成し、A/B テスト時はセクションの包含/除外で制御します。
 
 ### 2.3 tools — ツールディスパッチ
 

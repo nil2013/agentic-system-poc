@@ -129,8 +129,9 @@ stages/
 ```
 src/main/scala/
 ├── messages/     # ChatMessage ADT, JSON codecs
-├── tools/        # StatuteSearch, LawListSearch, Arithmetic, ToolDispatch
-├── agent/        # AgentLoop, ConversationState
+├── tools/        # ToolDispatch, Arithmetic
+│   └── egov/     # e-Gov API クライアント (Models, LawRepository, ArticleRepository, EGovApiClient, ArticleNumberConverter)
+├── agent/        # AgentLoop, ConversationState, ConversationLogger, LlmClient, Prompts
 └── stages/       # Stage ごとのエントリポイント (main)
 ```
 

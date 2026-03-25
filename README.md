@@ -93,7 +93,7 @@ Python 版ガイド（[`docs/guide/agentic-system-learning-guide.md`](docs/guide
 ```
 src/main/scala/
 ├── messages/     # ChatMessage ADT + JSON codecs
-├── agent/        # AgentLoop, ConversationState, ConversationLogger
+├── agent/        # AgentLoop, ConversationState, ConversationLogger, LlmClient, Prompts
 ├── tools/        # ToolDispatch, Arithmetic
 │   └── egov/     # e-Gov 法令 API V1 クライアント
 └── stages/       # Stage ごとのエントリポイント

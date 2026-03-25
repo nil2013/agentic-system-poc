@@ -150,8 +150,9 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-25_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **Stage 0-7 完了**（全ステージ実施。Stage 8 REPL のみ残り）
-- ガイド包括的改訂（R-01〜R-13）+ 発展的学習ガイド（24課題）
+- **Stage 0-8 完了**（全ステージ実施。カリキュラム完了）
+- ガイド包括的改訂（R-01〜R-13）+ 発展的学習ガイド（24課題 + Stage EX ロードマップ）
+- LLM API アーキテクチャ再編（Prompts + LlmClient + AgentConfig リファクタリング）
 - reasoning_content キャプチャ機能実装
 - Planning 文献調査 + Qwen3.5 量子化調査（2件）
 
@@ -163,8 +164,9 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 - **SystemPrompt 制御**: 静かなフォールバックを抑制し、Q2 で「誠実かつ能動的」な挙動を誘発
 
 ### 次のアクション（優先順）
-1. Stage 8（REPL 統合）の実施
-2. 発展的課題の選択的実施（A7-3 中間ラウンド reasoning が最優先）
+1. Stage EX（REPL 実用化）に進む
+2. 最優先: 法令内条文検索ツール（EX-1）+ MAX_TOOL_ROUNDS 動的調整
+3. 発展的課題の選択的実施
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

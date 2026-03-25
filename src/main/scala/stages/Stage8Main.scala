@@ -45,15 +45,22 @@ object Stage8Main {
     val opts = parseArgs(args)
     val sessionId = opts.getOrElse("session", "repl-default")
 
+    val egovVersion = opts.getOrElse("egov-api", sys.env.getOrElse("EGOV_API_VERSION", "v1"))
+    val backend = tools.egov.EGovBackendFactory.create(egovVersion)
+    val toolDispatch = tools.ToolDispatch.forBackend(backend)
+    val capPrompt = Prompts.capabilityNotice(backend.capabilities)
+
     val config = AgentConfig(
       baseUrl = opts.getOrElse("url", sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1")),
       model = opts.getOrElse("model", sys.env.getOrElse("LLM_MODEL", "local")),
-      promptSections = List(Prompts.Role, Prompts.FallbackControl)
+      promptSections = List(Prompts.Role, Prompts.FallbackControl, capPrompt),
+      toolDispatch = toolDispatch
     )
 
     println("=== Agentic System REPL ===")
     println(s"Model: ${config.model}")
     println(s"Base URL: ${config.baseUrl}")
+    println(s"e-Gov API: $egovVersion")
     println(s"Session: $sessionId")
     println()
 

@@ -5,24 +5,20 @@ import scala.xml.*
 /** 条文の取得と XML パースを担当する。
   *
   * == 役割 ==
-  * LLM からのアラビア数字条番号（`"709"`）を受け取り、漢数字に変換（[[ArticleNumberConverter]]）、
-  * e-Gov API を呼び出し（[[EGovApiClient]]）、XML レスポンスをパースして [[ArticleContent]] に変換する。
+  * LLM からのアラビア数字条番号（`"709"`）を受け取り、漢数字に変換
+  * （[[v1.ArticleNumberConverter]]）、e-Gov API を呼び出し、XML レスポンスを
+  * パースして [[ArticleContent]] に変換する。
   *
-  * '''ステートレス設計''': 内部状態を持たない。すべての状態は [[EGovApiClient]] の
-  * HTTP 呼び出しに委譲される。キャッシュは行わない（条文リクエストは都度異なるため）。
+  * '''ステートレス設計''': 内部状態を持たない。キャッシュは行わない。
   *
-  * == エラーハンドリング規約 ==
-  * すべてのメソッドは `Either[String, ArticleContent]` を返す:
-  *  - `Left`: ユーザー向けエラーメッセージ（日本語、`"エラー:"` プレフィックス）
-  *  - `Right`: 正常に取得・パースされた条文
+  * == V1 固有の依存 ==
+  * 漢数字変換（[[v1.ArticleNumberConverter]]）は V1 API の `/articles` エンドポイント固有。
+  * V2 では `/law_data` + `elm` パラメータを使う見込みで、V2 実装時に解消予定。
   *
-  * エラーメッセージは LLM の Tool Result としてそのまま返される。
-  * LLM がエラーをユーザーに伝えるか内部知識で補完するかは LLM の判断に委ねられる
-  * （「静かなフォールバック」問題。Stage 4 RESULTS.md §3.5 参照）。
-  *
-  * @see [[tools.ToolDispatch]] `get_article` ツールが本オブジェクトを使用
+  * @param api e-Gov API バックエンド
+  * @see [[tools.ToolDispatch]] `get_article` ツールが本クラスを使用
   */
-object ArticleRepository {
+class ArticleRepository(api: EGovLawApi) {
 
   /** 指定法令の指定条文を取得してパースする。
     *
@@ -37,9 +33,9 @@ object ArticleRepository {
       case None => return Left(s"エラー: 条番号は数字で指定してください: '$articleNumber'")
     }
 
-    val kanjiArticle = ArticleNumberConverter.toKanjiArticle(num)
+    val kanjiArticle = v1.ArticleNumberConverter.toKanjiArticle(num)
 
-    EGovApiClient.fetchArticle(lawId, kanjiArticle).flatMap { root =>
+    api.fetchArticle(lawId, kanjiArticle).flatMap { root =>
       val lawContents = root \ "ApplData" \ "LawContents"
       parseArticleXml(lawId, articleNumber, lawContents)
     }
@@ -61,10 +57,10 @@ object ArticleRepository {
       case None => return Left(s"エラー: 項番号は数字で指定してください: '$paragraphNumber'")
     }
 
-    val kanjiArticle = ArticleNumberConverter.toKanjiArticle(artNum)
-    val kanjiParagraph = ArticleNumberConverter.toKanjiParagraph(paraNum)
+    val kanjiArticle = v1.ArticleNumberConverter.toKanjiArticle(artNum)
+    val kanjiParagraph = v1.ArticleNumberConverter.toKanjiParagraph(paraNum)
 
-    EGovApiClient.fetchArticleWithParagraph(lawId, kanjiArticle, kanjiParagraph).flatMap { root =>
+    api.fetchArticleWithParagraph(lawId, kanjiArticle, kanjiParagraph).flatMap { root =>
       val lawContents = root \ "ApplData" \ "LawContents"
       parseArticleXml(lawId, articleNumber, lawContents)
     }

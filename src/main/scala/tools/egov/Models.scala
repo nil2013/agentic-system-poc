@@ -1,9 +1,9 @@
-/** e-Gov 法令 API V1 のドメインモデル。
+/** e-Gov 法令 API のドメインモデル（V1/V2 共通）。
   *
-  * `tools.egov` パッケージは e-Gov 法令 API V1 をラップし、LLM の Tool Calling から
+  * `tools.egov` パッケージは e-Gov 法令 API をラップし、LLM の Tool Calling から
   * 利用できるインターフェースを提供する。3層構成:
   *
-  *  - '''API Client 層''' ([[EGovApiClient]]): HTTP リクエスト + XML パース
+  *  - '''API Client 層''' ([[EGovLawApi]] trait + V1/V2 実装): HTTP リクエスト + レスポンスパース
   *  - '''Domain 層''' ([[LawRepository]], [[ArticleRepository]]): キャッシュ・名前解決・条文取得
   *  - '''Tool Calling 層''' ([[tools.ToolDispatch]]): LLM ↔ ドメイン層のブリッジ
   *

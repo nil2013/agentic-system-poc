@@ -1,5 +1,7 @@
 package agent
 
+import tools.egov.Capability
+
 /** SystemPrompt のセクション定数。
   *
   * 各 StageMain は `AgentConfig.promptSections` に必要なセクションを列挙する。
@@ -26,4 +28,19 @@ object Prompts {
   val FallbackControl: String =
     "重要: ツールがエラーを返した場合は、エラーの内容をそのままユーザーに伝えてください。" +
     "内部知識で代替回答しないでください。「見つかりませんでした」と正直に伝えてください。"
+
+  /** バックエンド能力に応じた案内文を生成する。
+    *
+    * V1 モード（KeywordSearch なし）: 条番号推測を抑制する警告
+    * V2 モード（KeywordSearch あり）: search_keyword ツールの案内
+    */
+  def capabilityNotice(capabilities: Set[Capability]): String = {
+    if (capabilities.contains(Capability.KeywordSearch)) {
+      "条文内容のキーワード検索が利用可能です（search_keyword ツール）。" +
+      "条番号が不明な場合は、まず search_keyword で該当条文を検索してください。"
+    } else {
+      "注意: 条文内容のキーワード検索は現在利用できません。" +
+      "条番号が不明な場合は、推測せずにユーザーに条番号を確認してください。"
+    }
+  }
 }

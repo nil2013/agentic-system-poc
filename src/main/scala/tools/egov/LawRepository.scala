@@ -15,10 +15,11 @@ package tools.egov
   * [[resolveLawId]] はこれを e-Gov API で使える lawId に変換する。
   * 解決の優先順位は [[ResolveResult]] を参照。
   *
-  * @see [[EGovApiClient.fetchLawList]] キャッシュの元データ取得
-  * @see [[tools.ToolDispatch]] `find_laws` ツールが本オブジェクトの `findByKeyword` を使用
+  * @param api e-Gov API バックエンド
+  * @see [[EGovLawApi]] バックエンドの共通インターフェース
+  * @see [[tools.ToolDispatch]] `find_laws` ツールが本クラスの `findByKeyword` を使用
   */
-object LawRepository {
+class LawRepository(api: EGovLawApi) {
 
   private var cache: Option[Seq[LawInfo]] = None
 
@@ -32,7 +33,7 @@ object LawRepository {
     */
   def loadLawList(category: Int = 2): Seq[LawInfo] = {
     cache.getOrElse {
-      EGovApiClient.fetchLawList(category) match {
+      api.fetchLawList(category) match {
         case Right(laws) =>
           cache = Some(laws)
           laws

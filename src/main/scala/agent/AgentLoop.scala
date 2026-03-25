@@ -1,7 +1,7 @@
 package agent
 
 import messages.*
-import tools.ToolDispatch
+import tools.{ToolDispatch, Arithmetic}
 import io.circe.*
 import io.circe.syntax.*
 
@@ -23,7 +23,8 @@ case class AgentConfig(
     maxToolRounds: Int = 5,
     temperature: Double = 0.0,
     timeoutSeconds: Int = 120,
-    promptSections: List[String] = List(Prompts.Role)
+    promptSections: List[String] = List(Prompts.Role),
+    toolDispatch: ToolDispatch = ToolDispatch.defaultV1
 ) {
   /** プロンプトセクションを結合したシステムプロンプト文字列。 */
   def systemPrompt: String = promptSections.mkString("\n\n")
@@ -92,7 +93,7 @@ object AgentLoop {
     var totalTokens = 0
 
     for (round <- 0 until config.maxToolRounds) {
-      val llmResp = LlmClient.chatCompletion(currentMessages, config, tools = Some(ToolDispatch.toolDefs))
+      val llmResp = LlmClient.chatCompletion(currentMessages, config, tools = Some(config.toolDispatch.toolDefs))
       totalTokens += llmResp.totalTokens
 
       val assistantMsg: ChatMessage.Assistant = ChatMessage.fromJson(llmResp.message) match {
@@ -120,7 +121,7 @@ object AgentLoop {
         toolCallLog = toolCallLog :+ logEntry
         println(s"  [Tool call #$round] $logEntry")
 
-        val result = ToolDispatch.dispatch(tc.name, tc.arguments)
+        val result = config.toolDispatch.dispatch(tc.name, tc.arguments)
         currentMessages = currentMessages :+ ChatMessage.ToolResult(tc.id, result)
       }
     }

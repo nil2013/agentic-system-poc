@@ -3,7 +3,6 @@ package stages
 import agent.*
 import messages.*
 import tools.ToolDispatch
-import tools.egov.*
 import io.circe.*
 import io.circe.syntax.*
 import io.circe.parser.parse
@@ -97,7 +96,7 @@ object Stage5Main {
       }
 
       val argsObj = JsonObject.fromMap(resolvedArgs.map { case (k, v) => k -> Json.fromString(v) })
-      val result = ToolDispatch.dispatch(step.tool, argsObj)
+      val result = ToolDispatch.defaultV1.dispatch(step.tool, argsObj)
       stepResults = stepResults + (step.id -> result)
 
       logger.toolCall(idx, step.tool, resolvedArgs.toString, result)

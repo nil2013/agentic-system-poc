@@ -6,39 +6,98 @@ import io.circe.{Json, JsonObject}
 /** LLM の Tool Calling と実際のツール実装を橋渡しする中央ディスパッチャ。
   *
   * 2つの責務を持つ:
-  *  1. '''`toolDefs`''': OpenAI Chat Completions API の `tools` パラメータとして送信される
-  *     ツールスキーマ JSON。LLM はこの定義を見てツールを選択する。
-  *     '''`description` は事実上プロンプトの一部'''であり、変更は LLM の挙動に直接影響する。
+  *  1. '''`toolDefs`''': OpenAI Chat Completions API の `tools` パラメータに送信する
+  *     ツールスキーマ JSON。バックエンドの [[Capability]] に基づいて動的に生成される。
   *  2. '''`dispatch`''': LLM が返した `tool_calls` を受け取り、対応する実装に振り分ける。
-  *     ツール名文字列がスキーマ定義とディスパッチの結合点。
   *
-  * == ツール一覧 ==
-  *  - `find_laws`: 法令名キーワード検索 → [[egov.LawRepository.findByKeyword]]
-  *  - `get_article`: 条文取得 → [[egov.LawRepository.resolveLawId]] + [[egov.ArticleRepository.getArticle]]
-  *  - `calculate`: 四則演算 → [[Arithmetic.calculate]]
+  * == V1/V2 対応 ==
+  * `capabilities` に [[Capability.KeywordSearch]] が含まれる場合（V2）、
+  * `search_keyword` ツールが `toolDefs` に追加される。
   *
-  * == 拡張手順 ==
-  * 新しいツールを追加するには:
-  *  1. `toolDefs` の `Json.arr` にツール定義を追加
-  *  2. `dispatch` の `match` に `case` を追加
-  *  3. ツールの実装を作成（`tools/` または `tools/egov/` パッケージ）
+  * @param lawRepo       法令一覧キャッシュ・名前解決
+  * @param articleRepo   条文取得・パース
+  * @param capabilities  バックエンドが提供する能力（ツール定義の動的生成に使用）
   *
-  * == 既知の制限 ==
-  *  - `toolDefs` はコンパイル時定数。ランタイムでのツール動的登録は未対応
-  *  - スキーマ JSON は手書き（case class からの自動導出ではない）。PoC では十分
-  *
-  * @see [[agent.AgentLoop]] 本オブジェクトの `toolDefs` と `dispatch` を使用するエージェントループ
+  * @see [[agent.AgentLoop]] `config.toolDispatch` 経由で使用
+  * @see [[EGovBackendFactory]] バックエンド生成
   */
-object ToolDispatch {
+class ToolDispatch(
+    lawRepo: LawRepository,
+    articleRepo: ArticleRepository,
+    capabilities: Set[Capability]
+) {
 
-  /** OpenAI Chat Completions API の `tools` パラメータとして送信されるツール定義。
-    *
-    * この JSON はリクエストごとに LLM に渡される。LLM はこの定義の `description` と
-    * `parameters` を読んでツールを選択するため、description の書き方はルーティング精度に影響する
-    * （Stage 3 の実験では Qwen3.5-35B-A3B の能力により差は顕在化しなかった）。
-    */
-  val toolDefs: Json = Json.arr(
-    Json.obj("type" -> Json.fromString("function"), "function" -> Json.obj(
+  /** バックエンドの能力に基づいて動的に生成されるツール定義 JSON。 */
+  def toolDefs: Json = {
+    val base = List(findLawsDef, getArticleDef, calculateDef)
+    val extra = if (capabilities.contains(Capability.KeywordSearch)) {
+      List(searchKeywordDef)
+    } else {
+      Nil
+    }
+    Json.arr((base ++ extra)*)
+  }
+
+  /** ツール呼び出しを実行する。 */
+  def dispatch(name: String, args: JsonObject): String = {
+    name match {
+      case "find_laws" =>
+        val keyword = args("keyword").flatMap(_.asString).getOrElse("")
+        val results = lawRepo.findByKeyword(keyword)
+        if (results.isEmpty) {
+          s"'$keyword' を含む法令は見つかりませんでした。"
+        } else {
+          val lines = results.map { law =>
+            s"- ${law.lawName} [ID: ${law.lawId}]（${law.lawNo}）"
+          }
+          s"'$keyword' を含む法令 (${results.size}件):\n${lines.mkString("\n")}"
+        }
+
+      case "get_article" =>
+        val lawIdOrName = args("law_id_or_name").flatMap(_.asString).getOrElse("")
+        val articleNum = args("article_number").flatMap(_.asString).getOrElse("")
+        val paragraphNum = args("paragraph_number").flatMap(_.asString)
+
+        val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+          case ResolveResult.Resolved(id) => Right(id)
+          case ResolveResult.Ambiguous(candidates) =>
+            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。find_laws で法令IDを確認できます。")
+          case ResolveResult.NotFound =>
+            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+        }
+
+        val result = resolvedLawId.flatMap { lawId =>
+          paragraphNum match {
+            case Some(pn) if pn.nonEmpty =>
+              articleRepo.getArticleWithParagraph(lawId, articleNum, pn)
+            case _ =>
+              articleRepo.getArticle(lawId, articleNum)
+          }
+        }
+
+        result match {
+          case Right(content) => content.toText
+          case Left(err) => err
+        }
+
+      case "calculate" =>
+        val expr = args("expression").flatMap(_.asString).getOrElse("")
+        Arithmetic.calculate(expr)
+
+      case "search_keyword" =>
+        // V2 stub — Phase 2 で実装予定
+        "search_keyword: V2 バックエンドの実装は次フェーズで行います。"
+
+      case other =>
+        s"エラー: 未知のツール '$other'"
+    }
+  }
+
+  // --- ツール定義 JSON ---
+
+  private val findLawsDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("find_laws"),
       "description" -> Json.fromString(
         "法令名にキーワードを含む法令を検索する。法令の正式名称、法令ID、法令番号を返す。" +
@@ -54,8 +113,10 @@ object ToolDispatch {
         ),
         "required" -> Json.arr(Json.fromString("keyword"))
       )
-    )),
-    Json.obj("type" -> Json.fromString("function"), "function" -> Json.obj(
+    ))
+
+  private val getArticleDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("get_article"),
       "description" -> Json.fromString(
         "法令の条文を取得する。法令ID（find_lawsで取得）または法令名と、条番号を指定する。"
@@ -78,8 +139,10 @@ object ToolDispatch {
         ),
         "required" -> Json.arr(Json.fromString("law_id_or_name"), Json.fromString("article_number"))
       )
-    )),
-    Json.obj("type" -> Json.fromString("function"), "function" -> Json.obj(
+    ))
+
+  private val calculateDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("calculate"),
       "description" -> Json.fromString("数式を計算して結果を返す。四則演算のみ対応。金額計算や割合計算に使う。"),
       "parameters" -> Json.obj(
@@ -93,65 +156,46 @@ object ToolDispatch {
         "required" -> Json.arr(Json.fromString("expression"))
       )
     ))
-  )
 
-  /** ツール呼び出しを実行する。
-    *
-    * @param name ツール名（`toolDefs` の `function.name` と一致する必要がある）
-    * @param args LLM が生成した引数（パース済み `JsonObject`）
-    * @return ツールの実行結果（人間に読みやすいテキスト）。
-    *         '''エラー規約''': エラーメッセージは `"エラー: "` プレフィックスで返される。
-    *         `get_article` のエラーには `find_laws` への誘導メッセージが含まれる
-    *         （LLM が「まず法令を検索して」というフローを学習しやすくするため）。
+  private val searchKeywordDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("search_keyword"),
+      "description" -> Json.fromString(
+        "法令の条文内容をキーワードで全文検索する。" +
+        "条番号が不明な場合に、キーワードを含む条文を発見するために使う。" +
+        "検索結果には条文の位置（条番号等）とテキストスニペットが含まれる。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "keyword" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("検索キーワード。例: 訴訟記録の閲覧, 損害賠償")
+          ),
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("検索対象の法令ID（省略可）。指定すると特定法令内のみを検索する。")
+          )
+        ),
+        "required" -> Json.arr(Json.fromString("keyword"))
+      )
+    ))
+}
+
+/** [[ToolDispatch]] のファクトリ。 */
+object ToolDispatch {
+
+  /** 指定バックエンドに対応する [[ToolDispatch]] を生成する。
+    * [[LawRepository]] と [[ArticleRepository]] も内部で生成される。
     */
-  def dispatch(name: String, args: JsonObject): String = {
-    name match {
-      case "find_laws" =>
-        val keyword = args("keyword").flatMap(_.asString).getOrElse("")
-        val results = LawRepository.findByKeyword(keyword)
-        if (results.isEmpty) {
-          s"'$keyword' を含む法令は見つかりませんでした。"
-        } else {
-          val lines = results.map { law =>
-            s"- ${law.lawName} [ID: ${law.lawId}]（${law.lawNo}）"
-          }
-          s"'$keyword' を含む法令 (${results.size}件):\n${lines.mkString("\n")}"
-        }
-
-      case "get_article" =>
-        val lawIdOrName = args("law_id_or_name").flatMap(_.asString).getOrElse("")
-        val articleNum = args("article_number").flatMap(_.asString).getOrElse("")
-        val paragraphNum = args("paragraph_number").flatMap(_.asString)
-
-        val resolvedLawId = LawRepository.resolveLawId(lawIdOrName) match {
-          case ResolveResult.Resolved(id) => Right(id)
-          case ResolveResult.Ambiguous(candidates) =>
-            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
-            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。find_laws で法令IDを確認できます。")
-          case ResolveResult.NotFound =>
-            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
-        }
-
-        val result = resolvedLawId.flatMap { lawId =>
-          paragraphNum match {
-            case Some(pn) if pn.nonEmpty =>
-              ArticleRepository.getArticleWithParagraph(lawId, articleNum, pn)
-            case _ =>
-              ArticleRepository.getArticle(lawId, articleNum)
-          }
-        }
-
-        result match {
-          case Right(content) => content.toText
-          case Left(err) => err
-        }
-
-      case "calculate" =>
-        val expr = args("expression").flatMap(_.asString).getOrElse("")
-        Arithmetic.calculate(expr)
-
-      case other =>
-        s"エラー: 未知のツール '$other'"
-    }
+  def forBackend(api: EGovLawApi): ToolDispatch = {
+    val lawRepo = new LawRepository(api)
+    val articleRepo = new ArticleRepository(api)
+    new ToolDispatch(lawRepo, articleRepo, api.capabilities)
   }
+
+  /** V1 バックエンドのデフォルトインスタンス。
+    * [[agent.AgentConfig]] のデフォルト値として使用される。
+    */
+  lazy val defaultV1: ToolDispatch = forBackend(new egov.v1.V1Client())
 }

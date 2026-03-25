@@ -41,6 +41,7 @@
    - **`max_tokens` への影響**: thinking は ~1500-2000 tokens を消費する。`max_tokens` が不足すると、thinking だけで予算を使い切り `content`（実際の回答）が空になる。全ステージで `max_tokens` を **4096 以上** に設定すること
    - **thinking tokens は蓄積しない**: `reasoning_content` は API レスポンスに含まれるが、次のリクエストの messages には含まれない。つまり thinking tokens はターンごとに消費されるが、会話履歴には蓄積しない（Stage 4 のコンテキスト管理にとって好都合）
    - **`/no_think` は llama-server 経由で効かない場合がある**（2026-03-23 時点で確認）
+   - **`reasoning_content` と `content` の境界パース問題**: ツール呼び出しを含む複雑な対話で、回答テキストが `reasoning_content` フィールドに混入する場合が観察されている（Stage 7 T4 で確認）。この場合 `content` が空になり、回答が失われたように見える。原因は未確定（llama-server のパーサー、モデルの thinking タグ生成、`-c` パラメータの影響等が候補）。thinking ブロックの内容が不自然な場合（`</function>` タグの混入等）は、この問題を疑うこと
    - **Stage 7 では thinking ブロックの内容を分析対象とする**（`stages/stage7/PLAN.md` 参照）
 
 7. **9B モデルと thinking mode の相性問題**: Qwen3.5-9B（dense）で thinking mode を有効にすると、35B-A3B とは逆に**性能が大幅に劣化する**ことが報告されている（推論速度 ~20倍低下、tool calling 精度 ~1/4）。9B モデルを Mac ローカルで使用する場合は **thinking mode を無効にすること**を強く推奨する。35B-A3B（MoE, GPU WS）では thinking-on で安定動作する。
@@ -1429,3 +1430,4 @@ Stage 0 (疎通・基盤)
 | 2026-03-24 | §1.7 予想テーブルに条件付き注記を追加 | R-10: 失敗パターンの条件依存性 |
 | 2026-03-24 | 付録B 依存関係図 + 付録C 所要時間に Stage 7-8 追加 | R-08, R-13: 新ステージ反映 |
 | 2026-03-25 | §7.2 に全ラウンド reasoning 収集の前提条件チェックを追記 | Stage 7 実施時に AgentLoop が中間ラウンドの reasoning を収集していない実装バグが判明。API は reasoning を返していたが、AgentLoop が TurnResult に集約していなかった |
+| 2026-03-25 | §0.3 項6 に reasoning_content / content 境界パース問題の注意喚起を追記 | Stage 7 T4 で回答テキストが reasoning_content に混入する問題を観察。原因は未確定（切り分け未了）|

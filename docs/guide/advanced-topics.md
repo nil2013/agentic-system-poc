@@ -177,11 +177,21 @@
 
 **修正**: AgentLoop.runTurn に `allReasoning` リストを追加し、全ラウンドの reasoning を収集して TurnResult に結合して返すように改修済み。
 
-### A7-4: thinking の「回答しない」判断の分析
+### A7-4: reasoning_content / content 境界パース問題の原因分析
 
-**背景**: Stage 7 T4 で content=0 だが max_tokens=8192 でも同一結果。thinking で「この法律は尊崇義務と関係ない」と分析した結果、content を生成せずに停止した。
+**背景**: Stage 7 T4 (Round 2) で content=0 だったが、`reasoning_content` 内に完全な回答テキストと `</function>` タグの残骸が混入していた。Round 3（`-c 16384` に変更後）では同じクエリが content=177 で正常に返った。temperature=0 にもかかわらず結果が異なる。
 
-**課題**: T4 のような「thinking で正しく分析しているが回答を生成しない」パターンを体系的に収集。この判断が適切な場合（本当に回答不能）と不適切な場合（回答すべきだが停止してしまう）を区別する基準を設計。thinking の内容を回答に転用する仕組みの検討。
+**問題の切り分けが未了。** 原因の候補:
+1. **llama-server のパーサー**: `<think>` タグと tool calling の XML タグ（`</function>` 等）が混在するケースでの分離ロジックの不備
+2. **モデルの出力**: `</think>` タグの閉じ位置が不適切で、回答テキストが thinking 内に入る
+3. **`-c` パラメータの影響**: Round 2 (`-c 8192`) と Round 3 (`-c 16384`) で結果が異なるが、Round 2 時点の `-c` 設定が未確認
+4. **KV キャッシュの状態**: サーバー再起動のタイミングや前回リクエストの影響
+
+**課題**: 以下の手順で原因を特定する:
+1. `-c 8192` と `-c 16384` で同じクエリを実行し、`reasoning_content` の内容を raw JSON で比較
+2. llama-server のログ（`--verbose` 等）でモデルの raw 出力（thinking タグ含む）を確認
+3. 同一条件（`-c`、モデル、temperature）で複数回実行し、determinism を検証
+4. Qwen3.5 の thinking template（`<think>` タグ）と tool calling template（`<tool_call>` タグ）の相互作用を Jinja テンプレートレベルで分析
 
 ### A7-5: thinking 比率とツール結果の関係
 

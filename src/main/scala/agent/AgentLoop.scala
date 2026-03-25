@@ -88,6 +88,7 @@ object AgentLoop {
   ): (TurnResult, List[ChatMessage]) = {
     var currentMessages = messages
     var toolCallLog = List.empty[String]
+    var allReasoning = List.empty[String]  // 全ラウンドの reasoning を収集
     var totalTokens = 0
 
     for (round <- 0 until config.maxToolRounds) {
@@ -102,9 +103,14 @@ object AgentLoop {
         )
       }
 
+      // 全ラウンドの reasoning を収集（ツール選択の推論過程を含む）
+      assistantMsg.reasoning.foreach(r => allReasoning = allReasoning :+ r)
+
       if (assistantMsg.toolCalls.isEmpty) {
         currentMessages = currentMessages :+ assistantMsg
-        val result = TurnResult(assistantMsg, toolCallLog, totalTokens, assistantMsg.reasoning)
+        // 全ラウンドの reasoning を結合して TurnResult に含める
+        val combinedReasoning = if (allReasoning.nonEmpty) Some(allReasoning.mkString("\n---\n")) else None
+        val result = TurnResult(assistantMsg, toolCallLog, totalTokens, combinedReasoning)
         return (result, currentMessages)
       }
 

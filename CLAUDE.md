@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## General Guidance
+
+- このプロジェクトでは速度よりも品質を重視する。素早い回答よりは最善の回答を目指すこと。
+- 上記の指示は、YAGNI原則を無視することを意味するものではない。ad-hocな回答を禁じるもので、「その実装がいま必要か？」という問いは意味をなす。
+
 ## Project Overview
 
 ローカル LLM 推論（GPU ワークステーション上の llama.cpp）を使った agentic system の学習・PoC リポジトリ。フレームワーク非依存で、エージェントアーキテクチャの各概念を段階的に構築する。

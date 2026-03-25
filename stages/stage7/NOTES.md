@@ -62,3 +62,34 @@ total_tokens=3831 で max_tokens=8192 の上限には到達していない。つ
 ### 全体の結果は Round 1 と完全に一致
 
 max_tokens を 4096 → 8192 に上げても全ての統計が同一。max_tokens は Stage 7 のボトルネックではなかった。
+
+## 2026-03-24 18:35 — 重大な修正: reasoning_content は API から返されていた
+
+### 発見
+
+curl で直接確認したところ、**llama-server は tool_calls レスポンスでも `reasoning_content` を返している**:
+```json
+{
+  "has_tool_calls": true,
+  "content": "",
+  "reasoning_content": "ユーザーは民法709条の条文を求めています。get_article関数を使用して..."
+}
+```
+
+**ツール選択の推論過程が含まれている**（「get_article を使用」という判断の根拠）。
+
+### 原因
+
+Stage 7 RESULTS.md §3.3 で「ツール呼び出しターンでは reasoning_content が空（llama-server の挙動）」と報告したが、**これは誤り**。
+
+正確な原因は **AgentLoop の設計**:
+- 中間ラウンド（tool_calls あり）: `assistantMsg` は `currentMessages` に追加されるが、`reasoning` は `TurnResult` に含まれない
+- 最終回答（tool_calls なし）: `assistantMsg.reasoning` を `TurnResult.reasoning` に設定
+
+→ `TurnResult` は最終回答の reasoning のみを返し、中間ラウンドの reasoning は**メッセージ履歴内には存在するが、呼び出し元に公開されていなかった**。
+
+### 影響
+
+- Stage 7 の「ツール選択の推論は観察不能」は**実装の制約であり、API の制約ではない**
+- AgentLoop を修正して中間ラウンドの reasoning を収集すれば、ツール選択の推論過程が完全に観察可能
+- 発展的課題 A7-3（中間ラウンド reasoning キャプチャ）は API 仕様の制約ではなく実装の改修で対応可能

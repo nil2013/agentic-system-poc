@@ -74,15 +74,13 @@ Stage 2, 5, 6 から代表的なケースを選定:
 
 **T5（複雑タスク）**: 「3つの法律を取得した。次にこれらの目的規定を比較する」。回答生成の構造計画。
 
-### 3.3 構造的発見: ツール呼び出しターンでは thinking が返らない
+### 3.3 ~~構造的発見~~ → 実装上の制約（修正済み認識）
 
-T1, T3 で thinking chars = 0。**ツール選択の推論過程はキャプチャできない**。
+T1, T3 で thinking chars = 0。当初「llama-server が tool_calls レスポンスで reasoning_content を返さない」と報告したが、**これは誤り**。
 
-原因: AgentLoop のループ構造。tool_calls を含むレスポンスでは content/reasoning_content が空（llama-server の挙動）。thinking が返されるのは最終回答（tool_calls なし）のレスポンスのみ。
+**修正**: curl で直接確認したところ、llama-server は tool_calls レスポンスでも `reasoning_content` を返していた（例: 「ユーザーは民法709条を求めている → get_article を使用」）。原因は **AgentLoop が中間ラウンドの reasoning を TurnResult に集約していない実装上の制約**。`ChatMessage.fromJson` は reasoning を正しくパースしており、メッセージ履歴内には存在するが、`TurnResult` は最終回答の reasoning のみを返す設計だった。
 
-→ 現在の実装では、観察可能な thinking は:
-- ツール不使用の判断過程（T2）
-- 最終回答生成時の推論（T4, T5）
+→ AgentLoop を修正して中間ラウンドの reasoning を収集すれば、**ツール選択の推論過程が完全に観察可能**。発展的課題 A7-3 は API 制約ではなく実装改修で対応可能。
 
 ### 3.4 遭遇した問題
 

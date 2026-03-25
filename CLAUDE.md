@@ -146,7 +146,7 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 
 ## Instant Handover (DELETE AFTER READING)
 
-> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-24_session.md` をサブエージェントで参照。
+> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-25_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
 - **Stage 0-7 完了**（全ステージ実施。Stage 8 REPL のみ残り）
@@ -157,12 +157,18 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 ### 主な知見
 - **Stage 1-6 で一貫した天井効果**: 修正ループすら発動しない
 - **Stage 7**: ツール呼び出しターンでは reasoning_content が空（ツール選択推論は観察不能）
+  - → **修正済み**: AgentLoop が中間ラウンドの reasoning を未キャプチャだった実装バグ。Round 3 でツール選択推論が可視化
 - **thinking 比率**: ツール結果あり → 低い (0-25%), ツール不使用 → 高い (~50%)
 - **SystemPrompt 制御**: 静かなフォールバックを抑制し、Q2 で「誠実かつ能動的」な挙動を誘発
 
 ### 次のアクション（優先順）
 1. Stage 8（REPL 統合）の実施
 2. 発展的課題の選択的実施（A7-3 中間ラウンド reasoning が最優先）
+
+### 運用上の注意
+- llama-server は `--jinja -fa on` で起動すること
+- `max_tokens` は 4096 以上を指定すること（thinking mode 対策）
+- mmproj なしで VRAM ~21.7GB（Q4_K_M）。mmproj ありだと ~28GB
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

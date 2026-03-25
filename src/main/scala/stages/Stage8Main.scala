@@ -4,6 +4,8 @@ import agent.*
 import messages.*
 import sttp.client4.*
 import java.nio.file.Paths
+import org.jline.reader.{LineReaderBuilder, EndOfFileException, UserInterruptException}
+import org.jline.terminal.TerminalBuilder
 
 /** Stage 8: 対話的 REPL。Stage 0-7 の全コンポーネントを統合。
   *
@@ -75,16 +77,24 @@ object Stage8Main {
     println("'/help' でコマンド一覧を表示。'/quit' で終了。")
     println()
 
+    // JLine ターミナル + LineReader（マルチバイト対応の行編集）
+    val terminal = TerminalBuilder.builder().system(true).build()
+    val reader = LineReaderBuilder.builder().terminal(terminal).build()
+
     // REPL ループ
     var running = true
     while (running) {
-      print("You> ")
-      val line = scala.io.StdIn.readLine()
+      val line = try {
+        reader.readLine("You> ")
+      } catch {
+        case _: EndOfFileException => null          // Ctrl+D
+        case _: UserInterruptException => null      // Ctrl+C
+      }
 
       if (line == null) {
-        // EOF (Ctrl+D)
         println()
         saveAndExit(state)
+        terminal.close()
         running = false
       } else if (line.trim.isEmpty) {
         // 空行 → スキップ

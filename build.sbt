@@ -18,6 +18,9 @@ lazy val root = project
     // XML
     libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "2.3.0",
 
+    // Terminal (REPL line editing with multibyte support)
+    libraryDependencies += "org.jline" % "jline" % "3.28.0",
+
     // Test
     libraryDependencies += "org.scalameta" %% "munit" % "1.1.0" % Test,
 

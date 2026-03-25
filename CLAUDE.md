@@ -129,8 +129,19 @@ stages/
 ```
 src/main/scala/
 ├── messages/     # ChatMessage ADT, JSON codecs
-├── tools/        # ToolDispatch, Arithmetic
-│   └── egov/     # e-Gov API クライアント (Models, LawRepository, ArticleRepository, EGovApiClient, ArticleNumberConverter)
+├── tools/        # ToolDispatch (class, 動的 toolDefs), Arithmetic
+│   └── egov/     # e-Gov API 抽象化層
+│       ├── EGovLawApi.scala      # 共通 trait（V1/V2 共通インターフェース）
+│       ├── Capability.scala      # enum: バックエンド能力宣言
+│       ├── EGovBackendFactory.scala  # "v1"/"v2" → インスタンス生成
+│       ├── Models.scala          # LawInfo, ArticleContent 等（共通モデル）
+│       ├── LawRepository.scala   # class(api): キャッシュ・名前解決
+│       ├── ArticleRepository.scala  # class(api): 条文取得・パース
+│       ├── v1/                   # V1 バックエンド
+│       │   ├── V1Client.scala    # /api/1 エンドポイント実装
+│       │   └── ArticleNumberConverter.scala  # 漢数字変換（V1固有）
+│       └── v2/                   # V2 バックエンド（Phase 1: スケルトン）
+│           └── V2Client.scala
 ├── agent/        # AgentLoop, ConversationState, ConversationLogger, LlmClient, Prompts
 └── stages/       # Stage ごとのエントリポイント (main)
 ```
@@ -150,30 +161,24 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-25_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **Stage 0-8 完了**（全ステージ実施。カリキュラム完了）
-- ガイド包括的改訂（R-01〜R-13）+ 発展的学習ガイド（24課題 + Stage EX ロードマップ）
-- LLM API アーキテクチャ再編（Prompts + LlmClient + AgentConfig リファクタリング）
-- reasoning_content キャプチャ機能実装
-- Planning 文献調査 + Qwen3.5 量子化調査（2件）
-
-### 主な知見
-- **Stage 1-6 で一貫した天井効果**: 修正ループすら発動しない
-- **Stage 7**: ツール呼び出しターンでは reasoning_content が空（ツール選択推論は観察不能）
-  - → **修正済み**: AgentLoop が中間ラウンドの reasoning を未キャプチャだった実装バグ。Round 3 でツール選択推論が可視化
-- **thinking 比率**: ツール結果あり → 低い (0-25%), ツール不使用 → 高い (~50%)
-- **SystemPrompt 制御**: 静かなフォールバックを抑制し、Q2 で「誠実かつ能動的」な挙動を誘発
+- **V1/V2 バックエンド切り替え基盤（Phase 1）実装完了**
+  - `EGovLawApi` trait + `Capability` enum + `EGovBackendFactory`
+  - `ToolDispatch` class 化: capabilities ベースの動的ツールリスト生成
+  - `--egov-api v1|v2` CLI arg + `EGOV_API_VERSION` env var
+  - V2Client はスケルトン（`capabilities = Set(KeywordSearch)` のみ宣言）
+- **e-Gov ドキュメンテーション α版スクレイピング**（7ページ、`docs/egov-api/docs-alpha/`）
+- **V2 ドメインリファレンス作成**（`docs/egov-api/v2/domain-reference.md`）
+- **docs/egov-api/ ディレクトリ再整理**: v1/, v2/, docs-alpha/ + 3つの CLAUDE.md ルーティング
+- **V1 vs V2 比較評価**: V2 の `/keyword` が 196条ハルシネーション問題を構造的に解消
 
 ### 次のアクション（優先順）
-1. Stage EX（REPL 実用化）に進む
-2. 最優先: 法令内条文検索ツール（EX-1）+ MAX_TOOL_ROUNDS 動的調整
-3. 発展的課題の選択的実施
+1. **V2Client 実装（Phase 2）**: `/keyword` エンドポイントが最優先（EX-1a 直結）
+2. `egov-law-client-design.md` を新アーキテクチャ（trait 体制）に更新
+3. 統合テスト（IntegrationTest）の V1 バックエンド実行確認
+4. MAX_TOOL_ROUNDS 動的調整（V2 のツール増加に伴い 5→拡張）
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること
 - `max_tokens` は 4096 以上を指定すること（thinking mode 対策）
 - mmproj なしで VRAM ~21.7GB（Q4_K_M）。mmproj ありだと ~28GB
-
-### 運用上の注意
-- llama-server は `--jinja -fa on` で起動すること
-- `max_tokens` は 4096 以上を指定すること（thinking mode 対策）
-- mmproj なしで VRAM ~21.7GB（Q4_K_M）。mmproj ありだと ~28GB
+- **e-Gov API バージョン切り替え**: `--egov-api v2` or `EGOV_API_VERSION=v2`（デフォルト v1）

@@ -1,13 +1,14 @@
-# e-Gov 法令 API V1 ツール機能分析
+# e-Gov 法令 API ツール機能分析
 
-> 作成日: 2026-03-25
-> 目的: Stage EX（REPL 実用化）のツール拡充にあたり、API の全機能を分析しツール化候補を網羅的に整理する
-> API 仕様: `houreiapi_shiyosyo.pdf`, `hourei-api-v1-rest-spec.md`
-> 現行実装: `src/main/scala/tools/egov/`, `src/main/scala/tools/ToolDispatch.scala`
+> 作成日: 2026-03-25（初版: V1 分析）、2026-03-25（V2 セクション追加）
+> 目的: Stage EX（REPL 実用化）のツール拡充にあたり、V1/V2 の全機能を分析しツール化候補を網羅的に整理する
+> API 仕様（V1）: `v1/houreiapi_shiyosyo.pdf`, `v1/hourei-api-v1-rest-spec.md`
+> API 仕様（V2）: `v2/lawapi-v2.yaml`, `v2/domain-reference.md`
+> 現行実装: `src/main/scala/tools/egov/`（`EGovLawApi` trait + V1/V2 バックエンド）
 
 ---
 
-## 1. API エンドポイント全体マップ
+## 1. V1 API エンドポイント全体マップ
 
 | # | エンドポイント | メソッド | 実装状況 | ツール化候補 |
 |---|--------------|---------|---------|------------|
@@ -168,7 +169,7 @@ Stage 3 で 3ツールのルーティングは 100% だったが、ツールが 
 
 ---
 
-## 6. 実装ロードマップ
+## 6. 実装ロードマップ（V1 ベース）
 
 | フェーズ | ツール | 依存 | 見積もり |
 |---------|--------|------|---------|
@@ -178,3 +179,49 @@ Stage 3 で 3ツールのルーティングは 100% だったが、ツールが 
 | **Phase 2** | `get_appendix_table` | なし | 小（API 対応済み） |
 | **Phase 3** | `get_law_updates` | なし | 小 |
 | **Phase 3** | MAX_TOOL_ROUNDS 動的調整 | REPL コマンド追加 | 小 |
+
+---
+
+## 7. V2 API による能力拡張
+
+V2 API（`/api/2`）は V1 の構造的限界を解消する機能を提供する。V1/V2 切り替え基盤（`EGovLawApi` trait + `Capability` enum）は Phase 1 で実装済み。
+
+### 7.1 V2 で追加される主要エンドポイント
+
+| エンドポイント | 機能 | V1 の課題との対応 |
+|---|---|---|
+| `GET /keyword` | **条文内容の全文キーワード検索** | 196条事件の構造的解消。V1 では条番号推測が必要 → ハルシネーション |
+| `GET /laws` | 法令一覧の高度なフィルタリング（名前、種別、日付、カテゴリ） | V1 の `find_laws` は category=2 固定 |
+| `GET /law_data/{id}?elm=...` | 要素レベルの部分取得（特定条文だけ JSON で取得） | V1 は全文取得 or `/articles` のみ |
+| `GET /law_data/{id}?asof=...` | 時点指定クエリ（「X年Y月時点の法令」） | V1 に対応機能なし |
+| `GET /law_revisions/{id}` | 法令改正履歴の取得 | V1 に対応機能なし |
+| `GET /law_file/{type}/{id}` | 法令ファイル DL（html/rtf/docx） | V1 に対応機能なし |
+
+### 7.2 V1 ツール候補 vs V2 ネイティブ対応
+
+| V1 での候補（§3） | V1 実装方式 | V2 でのアプローチ |
+|---|---|---|
+| `search_articles`（最高優先） | `/lawdata` 全文取得 + クライアント側キーワード検索 + LRU キャッシュ | **`/keyword` エンドポイントで直接解決。キャッシュ不要** |
+| `get_law_structure`（高優先） | `/lawdata` 全文取得 + XML 構造要素抽出 | `/law_data?elm=TOC` or JSON 形式で構造取得 |
+| `find_laws` カテゴリ拡張 | 複数カテゴリの法令一覧キャッシュ | `/laws?law_type=Act,CabinetOrder` で一発 |
+| `get_appendix_table` | `/articles;appdxTable=...`（HTTP 300 対応必要） | `/law_data?elm=AppdxTable_1` |
+
+**結論**: V2 を使うと、V1 で「キャッシュ基盤が核」だった `search_articles` が API 一発で解決する。実装コストが大幅に削減される。
+
+### 7.3 V2 実装ロードマップ
+
+| フェーズ | ツール | V2 エンドポイント | 備考 |
+|---|---|---|---|
+| **V2 Phase 1**（最優先） | `search_keyword` | `GET /keyword` | 196条問題の構造的解消。ツール定義は Phase 1 で作成済み |
+| **V2 Phase 2** | `find_laws` 拡張 | `GET /laws` | 名前検索、複数種別、日付範囲 |
+| **V2 Phase 2** | `get_article` JSON 化 | `GET /law_data?elm=...&json_format=light` | XML パーサ不要に |
+| **V2 Phase 3** | `get_law_structure` | `GET /law_data?elm=TOC` | 目次取得 |
+| **V2 Phase 3** | `get_law_revisions` | `GET /law_revisions/{id}` | 改正履歴 |
+
+### 7.4 V1/V2 切り替え基盤の現状
+
+- `EGovLawApi` trait + `Capability` enum: 実装済み
+- `ToolDispatch`: capabilities ベースの動的ツールリスト生成: 実装済み
+- `--egov-api v1|v2` / `EGOV_API_VERSION`: 実装済み
+- `Prompts.capabilityNotice`: V1/V2 で SystemPrompt を動的切り替え: 実装済み
+- `V2Client`: スケルトン（Phase 2 以降で順次実装）

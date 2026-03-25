@@ -34,11 +34,11 @@ graph TB
     subgraph Domain["Domain Layer (tools.egov)"]
         LR["LawRepository<br/><i>法令一覧キャッシュ / 名前解決</i>"]
         AR["ArticleRepository<br/><i>条文取得 + XML パース</i>"]
-        ANC["ArticleNumberConverter<br/><i>709 → 第七百九条</i>"]
+        ANC["v1.ArticleNumberConverter<br/><i>709 → 第七百九条</i>"]
     end
 
     subgraph Ext["External"]
-        EGOV["EGovApiClient<br/><i>e-Gov 法令 API V1</i>"]
+        EGOV["EGovLawApi (trait)<br/><i>V1Client / V2Client</i>"]
         ARITH["Arithmetic<br/><i>四則演算パーサ</i>"]
     end
 
@@ -70,8 +70,8 @@ graph TB
 src/main/scala/
 ├── messages/     ChatMessage ADT + JSON codecs（reasoning フィールド対応）
 ├── agent/        AgentLoop, ConversationState, ConversationLogger, LlmClient, Prompts
-├── tools/        ToolDispatch, Arithmetic
-│   └── egov/     e-Gov API クライアント (5ファイル)
+├── tools/        ToolDispatch (class, 動的 toolDefs), Arithmetic
+│   └── egov/     EGovLawApi trait + v1/V1Client + v2/V2Client + Domain 層
 └── stages/       Stage ごとのエントリポイント
 ```
 
@@ -149,18 +149,18 @@ enum ChatMessage {
 
 ### 3.1 アーキテクチャ
 
-`tools.egov` パッケージは e-Gov 法令 API V1 をラップして、LLM の Tool Calling から利用できるインターフェースを提供します。
+`tools.egov` パッケージは e-Gov 法令 API を `EGovLawApi` trait で抽象化し、V1/V2 切り替え可能な構成で LLM の Tool Calling から利用できるインターフェースを提供します。
 
 ```
-ToolDispatch
-  ├─ LawRepository    ← 法令一覧キャッシュ + 名前解決
-  │    └─ EGovApiClient.fetchLawList()   ← /lawlists/2
-  └─ ArticleRepository ← 条文取得 + XML パース
-       ├─ ArticleNumberConverter  ← "709" → "第七百九条"
-       └─ EGovApiClient.fetchArticle()   ← /articles;lawId=...;article=...
+ToolDispatch(lawRepo, articleRepo, capabilities)
+  ├─ LawRepository(api)    ← 法令一覧キャッシュ + 名前解決
+  │    └─ api.fetchLawList()   ← /lawlists (V1) or /laws (V2)
+  └─ ArticleRepository(api) ← 条文取得 + XML パース
+       ├─ v1.ArticleNumberConverter  ← "709" → "第七百九条"（V1 固有）
+       └─ api.fetchArticle()   ← /articles (V1) or /law_data (V2)
 ```
 
-**EGovApiClient** は HTTP リクエストと XML パースのみを担当する薄いラッパーです。同期・ブロッキング設計（LLM 推論がボトルネックのため非同期化の利点が薄い）。
+**EGovLawApi** trait の具体実装として `v1.V1Client`（XML ベース）と `v2.V2Client`（JSON ベース、Phase 1 ではスケルトン）を提供。同期・ブロッキング設計（LLM 推論がボトルネックのため非同期化の利点が薄い）。
 
 > **URL 形式の注意:** `/articles` エンドポイントは標準的なクエリパラメータ（`?key=value`）ではなく、**セミコロン区切りの matrix parameter** を使用します（JAX-RS 形式）。sttp の URI 補間子はこれに対応しないため、完全な URL 文字列を構築して `Uri.unsafeParse` で変換しています。
 
@@ -177,8 +177,8 @@ User: 「個人情報保護法の第1条を見せてください」
 
 2. LLM → get_article(law_id_or_name="415AC0000000057", article_number="1")
    → LawRepository.resolveLawId → lawId はそのまま通過
-   → ArticleNumberConverter: "1" → "第一条"
-   → EGovApiClient.fetchArticle → e-Gov /articles;lawId=...;article=第一条
+   → v1.ArticleNumberConverter: "1" → "第一条"
+   → V1Client.fetchArticle → e-Gov /articles;lawId=...;article=第一条
    → XML パース → ArticleContent → toText
 ```
 

@@ -127,6 +127,7 @@ object AgentLoop {
 
     val fallback: ChatMessage.Assistant = ChatMessage.Assistant(Some("(MAX_TOOL_ROUNDS exceeded)"), Nil)
     currentMessages = currentMessages :+ fallback
-    (TurnResult(fallback, toolCallLog, totalTokens), currentMessages)
+    val combinedReasoning = if (allReasoning.nonEmpty) Some(allReasoning.mkString("\n---\n")) else None
+    (TurnResult(fallback, toolCallLog, totalTokens, combinedReasoning), currentMessages)
   }
 }

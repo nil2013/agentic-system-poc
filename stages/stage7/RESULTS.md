@@ -136,10 +136,41 @@ Stage 7 の最大の発見は**ネガティブな発見** — 「ツール選択
 | `src/main/scala/agent/ConversationLogger.scala` | thinkingBlock メソッド追加 |
 | `stages/stage7/RESULTS.md` | 本レポート |
 | `stages/stage7/NOTES.md` | 実験ノート |
-| `stages/stage7/conversation-log.md` | thinking 付き会話ログ |
+| `stages/stage7/conversation-log.md` | Round 1 会話ログ（reasoning 未キャプチャ） |
+| `stages/stage7/conversation-log-round2.md` | Round 2（max_tokens=8192、結果同一） |
+| `stages/stage7/conversation-log-round3.md` | **Round 3（全ラウンド reasoning キャプチャ修正後）** |
+
+## 5.1 Round 3 結果（全ラウンド reasoning キャプチャ修正後）
+
+AgentLoop の reasoning 収集バグを修正した上で再実行（max_tokens=8192, -c 16384）。
+
+### Thinking 統計（Round 3）
+
+| ID | クエリ | Thinking chars | Content chars | 比率 |
+|----|--------|---------------|--------------|------|
+| T1 | 民法709条 | **93** (R1: 0) | 87 | 52% |
+| T2 | 天気 | 163 (R1: 199) | 114 | 59% |
+| T3 | 不法行為根拠 | **154** (R1: 0) | 101 | 60% |
+| T4 | 非実在法令 | 106 (R1: 335) | **177** (R1: 0) | 37% |
+| T5 | 消費者比較 | 226 (R1: 517) | 1767 | 11% |
+
+### ツール選択の推論過程（初めて可視化）
+
+**T1**: 「ユーザーは民法709条の条文を求めています。get_article ツールを使って取得できます。法令名: 民法、条番号: 709」
+
+**T3**: 「不法行為の損害賠償請求の根拠条文 → 民法709条。まず find_laws で民法を検索して...」— **法学知識に基づく推論**（「不法行為 → 民法709条」）がツール呼び出しの前に行われている。
+
+### Round 1 → Round 3 の主な変化
+
+- T1, T3: thinking が 0 → 93, 154 に。**ツール選択の推論が可視化**
+- T4: content が 0 → 177 に。max_tokens=8192 + thinking 短縮の複合効果で回答が生成された
+- 全体の thinking 比率: 35% → 25%。中間ラウンド reasoning が加算されたが、content も増えたため比率は低下
+
+### 修正の影響の評価
+
+R1-2 の「ツール呼び出しターンでは thinking 比率 0%」は**実装バグによる偽の観察**だった。修正後は全テストケースで thinking が観察され、Stage 7 の本来の目的が達成された。
 
 ## 6. 次のステップ
 
 - Stage 8（REPL 統合）に進む
-- 中間ラウンドの reasoning キャプチャは発展的課題（A7-1）
-- thinking の定量分析フレームワーク（A7-1）は larger scale データが必要
+- thinking の定量分析フレームワーク（A7-1）は larger scale データで検証

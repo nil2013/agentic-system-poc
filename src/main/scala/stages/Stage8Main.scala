@@ -23,15 +23,36 @@ object Stage8Main {
   var showThinking = false
   var turnNum = 0
 
+  /** 簡易引数パーサー。`--key value` 形式と位置引数（セッションID）を受け付ける。 */
+  def parseArgs(args: Array[String]): Map[String, String] = {
+    var result = Map.empty[String, String]
+    var i = 0
+    while (i < args.length) {
+      if (args(i).startsWith("--") && i + 1 < args.length) {
+        result = result + (args(i).stripPrefix("--") -> args(i + 1))
+        i += 2
+      } else {
+        result = result + ("session" -> args(i))
+        i += 1
+      }
+    }
+    result
+  }
+
   def main(args: Array[String]): Unit = {
-    val sessionId = args.headOption.getOrElse("repl-default")
+    val opts = parseArgs(args)
+    val sessionId = opts.getOrElse("session", "repl-default")
+
     val config = AgentConfig(
+      baseUrl = opts.getOrElse("url", sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1")),
+      model = opts.getOrElse("model", sys.env.getOrElse("LLM_MODEL", "local")),
       promptSections = List(Prompts.Role, Prompts.FallbackControl)
     )
 
     println("=== Agentic System REPL ===")
     println(s"Model: ${config.model}")
     println(s"Base URL: ${config.baseUrl}")
+    println(s"Session: $sessionId")
     println()
 
     // ヘルスチェック

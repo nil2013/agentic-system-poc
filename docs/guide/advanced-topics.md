@@ -167,11 +167,15 @@
 
 **注意**: Stage 7 で判明した通り、tool_calls を含むレスポンスでは reasoning_content が空のため、ツール選択の推論は直接観察不能（A7-3 参照）。ツール不使用判断（T2）の thinking のみ分析可能。
 
-### A7-3: 中間ラウンドの reasoning キャプチャ
+### ~~A7-3: 中間ラウンドの reasoning キャプチャ~~ → **実装済み（Stage 7 設計要件）**
 
-**背景**: Stage 7 の最大の発見 — tool_calls を含むレスポンスでは `reasoning_content` が空であり、**ツール選択の推論過程が観察不能**。現在の AgentLoop は最終回答の reasoning のみキャプチャしている。
+**当初の分類**: 発展的課題として分類していたが、実際には **Stage 7 の実施前提条件** だった。
 
-**課題**: AgentLoop の各ラウンド（tool_calls ありのレスポンスを含む）から reasoning_content を収集してリスト化する。llama-server が tool_calls レスポンスで reasoning_content を返すかどうかはサーバー側の挙動に依存するため、まず API レスポンスを raw で確認する必要がある。
+**経緯**: Stage 7 実行時に「tool_calls レスポンスで reasoning_content が空」と報告したが、curl で直接確認したところ **llama-server は tool_calls レスポンスでも reasoning_content を返していた**（ツール選択の推論過程を含む）。原因は AgentLoop が中間ラウンドの reasoning を TurnResult に集約していない実装上の問題。
+
+**教訓**: 「Thinking ブロックを分析する」ステージを実施するなら、システムが thinking を全ラウンドで正しく収集していることが前提条件。実験設計の段階でインフラ検証を行うべきだった。
+
+**修正**: AgentLoop.runTurn に `allReasoning` リストを追加し、全ラウンドの reasoning を収集して TurnResult に結合して返すように改修済み。
 
 ### A7-4: thinking の「回答しない」判断の分析
 

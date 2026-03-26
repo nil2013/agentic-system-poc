@@ -123,6 +123,78 @@ class LawDataRepository(api: EGovLawApi) {
     }
   }
 
+  /** 「term」という。）パターン: 括弧書き内の定義を検出する正規表現。 */
+  private val DefinitionPattern = """「([^」]+)」という。）""".r
+
+  /** 定義文のスコープ（適用範囲）を検出する。 */
+  private def detectScope(sentenceText: String): String = {
+    if (sentenceText.contains("この条において")) "この条において"
+    else if (sentenceText.contains("この款において")) "この款において"
+    else if (sentenceText.contains("この節において")) "この節において"
+    else if (sentenceText.contains("この章において")) "この章において"
+    else if (sentenceText.contains("この法律において")) "この法律において"
+    else if (sentenceText.contains("以下同じ")) "以下同じ"
+    else ""
+  }
+
+  /** 法令内の用語の定義を検索する（MainProvision のみ、キャッシュあり）。
+    *
+    * 2段階検索:
+    *  1. 集中定義条文: ArticleCaption に "定義" を含む条文で term を検索（パターン1）
+    *  2. 分散定義: 全条文の Sentence で `「term」という。）` パターンを検索（パターン2/4）
+    *
+    * @param lawId      法令ID
+    * @param term       検索する用語
+    * @param maxResults 最大結果数（デフォルト: 20）
+    */
+  def getDefinitions(lawId: String, term: String, maxResults: Int = 20): Either[String, List[DefinitionHit]] = {
+    getLawData(lawId).map { root =>
+      val mainProvision = (root \\ "MainProvision").headOption
+      mainProvision.map { mp =>
+        val articles = mp \\ "Article"
+        var hits = List.empty[DefinitionHit]
+
+        // Step 1: 集中定義条文（ArticleCaption に "定義" を含む）
+        val defArticles = articles.filter { article =>
+          (article \ "ArticleCaption").text.trim.contains("定義")
+        }
+
+        for (article <- defArticles) {
+          val title = (article \ "ArticleTitle").text.trim
+          val caption = (article \ "ArticleCaption").text.trim
+          val sentences = (article \\ "Sentence").map(_.text.trim).filter(_.nonEmpty)
+
+          for (s <- sentences if s.contains(term)) {
+            val scope = detectScope(s)
+            val extractedTerm = DefinitionPattern.findFirstMatchIn(s)
+              .map(_.group(1))
+              .filter(_ == term)
+              .getOrElse(term)
+            hits = hits :+ DefinitionHit(extractedTerm, title, caption, scope, s, 1)
+          }
+        }
+
+        // Step 2: 分散定義（「term」という。）パターン）
+        for (article <- articles) {
+          val title = (article \ "ArticleTitle").text.trim
+          val caption = (article \ "ArticleCaption").text.trim
+          val sentences = (article \\ "Sentence").map(_.text.trim).filter(_.nonEmpty)
+
+          for (s <- sentences if s.contains(s"「${term}」という。）")) {
+            val scope = detectScope(s)
+            val patternType = if (scope.nonEmpty) 2 else 4
+            // Step 1 との重複排除
+            if (!hits.exists(h => h.articleTitle == title && h.term == term && h.definitionText == s)) {
+              hits = hits :+ DefinitionHit(term, title, caption, scope, s, patternType)
+            }
+          }
+        }
+
+        hits.take(maxResults)
+      }.getOrElse(Nil)
+    }
+  }
+
   /** 法令のメタデータを取得する（キャッシュあり）。 */
   def getMetadata(lawId: String): Either[String, LawMetadata] = {
     getLawData(lawId).map { root =>

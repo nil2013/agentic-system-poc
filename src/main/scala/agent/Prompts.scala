@@ -44,4 +44,11 @@ object Prompts {
       base
     }
   }
+
+  /** ツール結果のタグ処理指示（PLACEHOLDER: curl 実験で文言を最終決定）。 */
+  val TagHandling: String =
+    "一部のツールの結果にはタグが含まれる場合があります。\n" +
+    "[RESULT] のみ: 結果をユーザーに提示してください。\n" +
+    "[RESULT] + [NUDGE]: 結果を提示し、[NUDGE] の指示に従って追加のツール呼び出しを行ってください。\n" +
+    "[ERROR] + [NUDGE]: [NUDGE] の指示に従ってリカバリのツール呼び出しを行ってください。"
 }

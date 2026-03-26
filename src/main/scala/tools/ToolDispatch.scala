@@ -30,7 +30,7 @@ class ToolDispatch(
 
   /** バックエンドの能力に基づいて動的に生成されるツール定義 JSON。 */
   def toolDefs: Json = {
-    val base = List(findLawsDef, getArticleDef, getArticleRangeDef, searchWithinLawDef, getStructureDef, getMetadataDef, calculateDef)
+    val base = List(findLawsDef, getArticleDef, getArticleRangeDef, searchWithinLawDef, getDefinitionsDef, getStructureDef, getMetadataDef, calculateDef)
     val extra = if (capabilities.contains(Capability.KeywordSearch)) {
       List(searchKeywordDef)
     } else {
@@ -139,6 +139,38 @@ class ToolDispatch(
             val lines = hits.map(h => s"- ${h.toText}")
             s"'$keyword' を含む条文 (${hits.size}件):\n${lines.mkString("\n")}"
           case Left(err) => err
+        }
+
+      case "get_definitions" =>
+        val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
+        val term = args("term").flatMap(_.asString).getOrElse("")
+
+        if (term.isEmpty) {
+          "[ERROR]\n検索する用語を指定してください。\n\n[NUDGE]\nterm パラメータに検索したい用語を指定してください。例: 個人情報, 消費者, 届出"
+        } else {
+          val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+            case ResolveResult.Resolved(id) => Right(id)
+            case ResolveResult.Ambiguous(candidates) =>
+              val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+              Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。")
+            case ResolveResult.NotFound =>
+              Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+          }
+
+          resolvedLawId.flatMap { lawId =>
+            lawDataRepo.getDefinitions(lawId, term)
+          } match {
+            case Right(hits) if hits.nonEmpty =>
+              val resultText = hits.map(_.toText).mkString("\n\n")
+              val nudge = if (hits.forall(_.patternType == 1)) ""
+                else s"\n\n[NUDGE]\nこの結果は条文テキストのパターンマッチによる検出です。search_within_law で「$term」を検索すると、追加の用法が見つかる場合があります。"
+              s"[RESULT]\n$resultText$nudge"
+
+            case Right(_) =>
+              s"[ERROR]\n「$term」の定義条文は見つかりませんでした。\n\n[NUDGE]\nこの用語は条文本文中で別の形式で定義されている可能性があります。search_within_law で「$term」を検索して用法を確認してください。"
+
+            case Left(err) => err
+          }
         }
 
       case "get_law_structure" =>
@@ -297,6 +329,29 @@ class ToolDispatch(
           )
         ),
         "required" -> Json.arr(Json.fromString("law_id"), Json.fromString("keyword"))
+      )
+    ))
+
+  private val getDefinitionsDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("get_definitions"),
+      "description" -> Json.fromString(
+        "法令内の用語の定義を検索する。定義条文（第2条型）と本文中の定義（「○○」という。）パターンを検索する。" +
+        "用語の正式な定義を確認したいときに使う。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("法令IDまたは法令名。例: 415AC0000000057, 個人情報の保護に関する法律")
+          ),
+          "term" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("定義を検索する用語。例: 個人情報, 消費者, 届出")
+          )
+        ),
+        "required" -> Json.arr(Json.fromString("law_id"), Json.fromString("term"))
       )
     ))
 

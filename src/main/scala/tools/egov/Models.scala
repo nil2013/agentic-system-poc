@@ -86,6 +86,36 @@ case class SearchHit(
   }
 }
 
+/** 定義条文検索のヒット結果。[[LawDataRepository.getDefinitions]] の返却型。
+  *
+  * @param term           定義された用語（例: `"個人情報"`）
+  * @param articleTitle   条文タイトル（例: `"第二条"`）
+  * @param articleCaption 条文見出し（例: `"（定義）"`）
+  * @param scope          定義のスコープ（`"この法律において"` / `"この章において"` / `""`）
+  * @param definitionText 定義を含む文全体
+  * @param patternType    検出パターン: 1（集中定義条文）, 2（スコープ付き定義）, 4（暗黙的括弧定義）
+  */
+case class DefinitionHit(
+    term: String,
+    articleTitle: String,
+    articleCaption: String,
+    scope: String,
+    definitionText: String,
+    patternType: Int
+) {
+  def toText: String = {
+    val loc = List(articleTitle, articleCaption).filter(_.nonEmpty).mkString(" ")
+    val scopeStr = if (scope.nonEmpty) s" [$scope]" else ""
+    val patternStr = patternType match {
+      case 1 => "定義条文"
+      case 2 => "スコープ付き定義"
+      case 4 => "括弧定義"
+      case _ => "不明"
+    }
+    s"$loc$scopeStr ($patternStr)\n  用語: 「$term」\n  条文: ${definitionText.take(200)}"
+  }
+}
+
 /** 法令のメタデータ。[[LawDataRepository.getMetadata]] の返却型。 */
 case class LawMetadata(
     lawName: String,

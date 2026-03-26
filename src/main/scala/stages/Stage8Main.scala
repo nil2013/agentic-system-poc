@@ -53,7 +53,7 @@ object Stage8Main {
     val config = AgentConfig(
       baseUrl = opts.getOrElse("url", sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1")),
       model = opts.getOrElse("model", sys.env.getOrElse("LLM_MODEL", "local")),
-      promptSections = List(Prompts.Role, Prompts.FallbackControl, capPrompt),
+      promptSections = List(Prompts.Role, Prompts.FallbackControl, capPrompt, Prompts.TagHandling),
       toolDispatch = toolDispatch
     )
 

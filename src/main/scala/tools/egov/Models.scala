@@ -86,6 +86,57 @@ case class SearchHit(
   }
 }
 
+/** 法令のメタデータ。[[LawDataRepository.getMetadata]] の返却型。 */
+case class LawMetadata(
+    lawName: String,
+    lawNum: String,
+    era: String,
+    year: String,
+    lawType: String,
+    promulgateMonth: Option[String],
+    promulgateDay: Option[String],
+    partCount: Int,
+    chapterCount: Int,
+    articleCount: Int,
+    supplProvisionCount: Int
+) {
+  def toText: String = {
+    val lawTypeJa = lawType match {
+      case "Constitution" => "Constitution（憲法）"
+      case "Act" => "Act（法律）"
+      case "CabinetOrder" => "CabinetOrder（政令）"
+      case "ImperialOrder" => "ImperialOrder（勅令）"
+      case "MinisterialOrdinance" => "MinisterialOrdinance（府省令）"
+      case "Rule" => "Rule（規則）"
+      case other => other
+    }
+    val eraJa = era match {
+      case "Meiji" => "明治"
+      case "Taisho" => "大正"
+      case "Showa" => "昭和"
+      case "Heisei" => "平成"
+      case "Reiwa" => "令和"
+      case other => other
+    }
+    val promulgation = (promulgateMonth, promulgateDay) match {
+      case (Some(m), Some(d)) => s"${eraJa}${year}年${m}月${d}日"
+      case _ => "不明"
+    }
+    val scale = List(
+      if (partCount > 0) s"${partCount}編" else "",
+      if (chapterCount > 0) s"${chapterCount}章" else "",
+      s"${articleCount}条",
+      if (supplProvisionCount > 0) s"附則${supplProvisionCount}本" else ""
+    ).filter(_.nonEmpty).mkString(", ")
+
+    s"""法令名: $lawName
+       |法令番号: $lawNum
+       |種別: $lawTypeJa
+       |公布: $promulgation
+       |規模（本則）: $scale""".stripMargin
+  }
+}
+
 /** [[LawRepository.resolveLawId]] の返却型。法令名→lawId の解決結果を表す。
   *
   * 解決の優先順位:

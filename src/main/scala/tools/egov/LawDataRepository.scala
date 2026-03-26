@@ -72,6 +72,80 @@ class LawDataRepository(api: EGovLawApi) {
     }
   }
 
+  /** Article の Num 属性からベース条番号を抽出する。
+    * "709" → Some(709), "709_2" → Some(709), "38_3_2" → Some(38)
+    */
+  private def baseArticleNum(numAttr: String): Option[Int] = {
+    numAttr.takeWhile(_ != '_').toIntOption
+  }
+
+  /** 法令の条文範囲を取得する（MainProvision のみ、キャッシュあり）。
+    *
+    * ベース条番号が [from, to] の範囲にある条文をすべて取得する。
+    * 枝番号付き条文（例: Num="709_2"）はベース番号（709）で判定。
+    *
+    * @param lawId 法令ID
+    * @param from  開始条番号（inclusive）
+    * @param to    終了条番号（inclusive）
+    * @return 各条文のテキスト。範囲は50条以内。
+    */
+  def getArticleRange(lawId: String, from: Int, to: Int): Either[String, List[String]] = {
+    if (from > to) {
+      return Left(s"エラー: 開始条番号($from)が終了条番号($to)より大きいです。")
+    }
+    if (to - from > 50) {
+      return Left(s"エラー: 範囲が広すぎます（${to - from + 1}条）。50条以内で指定してください。")
+    }
+
+    getLawData(lawId).map { root =>
+      val mainProvision = (root \\ "MainProvision").headOption
+      mainProvision.map { mp =>
+        val articles = mp \\ "Article"
+        val matched = articles.filter { article =>
+          val numAttr = (article \ "@Num").text.trim
+          baseArticleNum(numAttr).exists(n => n >= from && n <= to)
+        }
+
+        matched.map { article =>
+          val caption = (article \ "ArticleCaption").text.trim
+          val title = (article \ "ArticleTitle").text.trim
+          val paragraphs = (article \ "Paragraph").map { para =>
+            val paraNum = (para \ "@Num").text.trim
+            val sentences = (para \\ "Sentence").map(_.text.trim).filter(_.nonEmpty)
+            val prefix = if (paraNum.nonEmpty && paraNum != "1") s"${paraNum}　" else "　"
+            prefix + sentences.mkString("")
+          }
+          val header = List(caption, title).filter(_.nonEmpty).mkString("\n")
+          if (header.nonEmpty) s"$header\n${paragraphs.mkString("\n")}"
+          else paragraphs.mkString("\n")
+        }.toList
+      }.getOrElse(Nil)
+    }
+  }
+
+  /** 法令のメタデータを取得する（キャッシュあり）。 */
+  def getMetadata(lawId: String): Either[String, LawMetadata] = {
+    getLawData(lawId).map { root =>
+      val law = (root \\ "Law").headOption.getOrElse(root)
+      val lawBody = law \ "LawBody"
+      val mainProvision = lawBody \ "MainProvision"
+
+      LawMetadata(
+        lawName = (lawBody \ "LawTitle").text.trim,
+        lawNum = (law \ "LawNum").text.trim,
+        era = (law \ "@Era").text.trim,
+        year = (law \ "@Year").text.trim,
+        lawType = (law \ "@LawType").text.trim,
+        promulgateMonth = Option((law \ "@PromulgateMonth").text.trim).filter(_.nonEmpty),
+        promulgateDay = Option((law \ "@PromulgateDay").text.trim).filter(_.nonEmpty),
+        partCount = (mainProvision \\ "Part").size,
+        chapterCount = (mainProvision \\ "Chapter").size,
+        articleCount = (mainProvision \\ "Article").size,
+        supplProvisionCount = (lawBody \ "SupplProvision").size
+      )
+    }
+  }
+
   /** テスト用: キャッシュをクリアする。 */
   private[egov] def clearCache(): Unit = {
     cache = Map.empty

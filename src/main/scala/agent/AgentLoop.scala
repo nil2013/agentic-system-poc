@@ -20,7 +20,7 @@ case class AgentConfig(
     baseUrl: String = sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1"),
     model: String = sys.env.getOrElse("LLM_MODEL", "local"),
     maxTokens: Int = 4096,
-    maxToolRounds: Int = 5,
+    maxToolRounds: Int = 15,
     temperature: Double = 0.0,
     timeoutSeconds: Int = 120,
     promptSections: List[String] = List(Prompts.Role),
@@ -93,7 +93,13 @@ object AgentLoop {
     var totalTokens = 0
 
     for (round <- 0 until config.maxToolRounds) {
-      val llmResp = LlmClient.chatCompletion(currentMessages, config, tools = Some(config.toolDispatch.toolDefs))
+      val spinner = new Spinner()
+      spinner.start()
+      val llmResp = try {
+        LlmClient.chatCompletion(currentMessages, config, tools = Some(config.toolDispatch.toolDefs))
+      } finally {
+        spinner.stop()
+      }
       totalTokens += llmResp.totalTokens
 
       val assistantMsg: ChatMessage.Assistant = ChatMessage.fromJson(llmResp.message) match {
@@ -126,7 +132,10 @@ object AgentLoop {
       }
     }
 
-    val fallback: ChatMessage.Assistant = ChatMessage.Assistant(Some("(MAX_TOOL_ROUNDS exceeded)"), Nil)
+    val fallback: ChatMessage.Assistant = ChatMessage.Assistant(
+      Some(s"(ツール呼び出し上限 ${config.maxToolRounds} 回に達しました。質問を分割して再試行してください。)"),
+      Nil
+    )
     currentMessages = currentMessages :+ fallback
     val combinedReasoning = if (allReasoning.nonEmpty) Some(allReasoning.mkString("\n---\n")) else None
     (TurnResult(fallback, toolCallLog, totalTokens, combinedReasoning), currentMessages)

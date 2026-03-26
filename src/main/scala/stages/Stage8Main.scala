@@ -61,6 +61,7 @@ object Stage8Main {
     println(s"Model: ${config.model}")
     println(s"Base URL: ${config.baseUrl}")
     println(s"e-Gov API: $egovVersion")
+    println(s"Max tool rounds: ${config.maxToolRounds}")
     println(s"Session: $sessionId")
     println()
 

@@ -30,7 +30,7 @@ class ToolDispatch(
 
   /** バックエンドの能力に基づいて動的に生成されるツール定義 JSON。 */
   def toolDefs: Json = {
-    val base = List(findLawsDef, getArticleDef, searchWithinLawDef, calculateDef)
+    val base = List(findLawsDef, getArticleDef, getArticleRangeDef, searchWithinLawDef, getMetadataDef, calculateDef)
     val extra = if (capabilities.contains(Capability.KeywordSearch)) {
       List(searchKeywordDef)
     } else {
@@ -82,6 +82,40 @@ class ToolDispatch(
           case Left(err) => err
         }
 
+      case "get_article_range" =>
+        val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
+        val fromStr = args("from_article").flatMap(_.asString)
+          .orElse(args("from_article").flatMap(_.asNumber).map(_.toString))
+          .getOrElse("")
+        val toStr = args("to_article").flatMap(_.asString)
+          .orElse(args("to_article").flatMap(_.asNumber).map(_.toString))
+          .getOrElse("")
+
+        val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+          case ResolveResult.Resolved(id) => Right(id)
+          case ResolveResult.Ambiguous(candidates) =>
+            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。")
+          case ResolveResult.NotFound =>
+            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+        }
+
+        val parsed = for {
+          lawId <- resolvedLawId
+          from <- fromStr.toIntOption.toRight(s"エラー: from_article は数字で指定してください: '$fromStr'")
+          to <- toStr.toIntOption.toRight(s"エラー: to_article は数字で指定してください: '$toStr'")
+        } yield (lawId, from, to)
+
+        parsed.flatMap { case (lawId, from, to) =>
+          lawDataRepo.getArticleRange(lawId, from, to)
+        } match {
+          case Right(texts) if texts.isEmpty =>
+            s"指定範囲（第${fromStr}条〜第${toStr}条）に該当する条文は見つかりませんでした。"
+          case Right(texts) =>
+            s"${texts.size}条を取得:\n\n${texts.mkString("\n\n")}"
+          case Left(err) => err
+        }
+
       case "search_within_law" =>
         val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
         val keyword = args("keyword").flatMap(_.asString).getOrElse("")
@@ -104,6 +138,25 @@ class ToolDispatch(
           case Right(hits) =>
             val lines = hits.map(h => s"- ${h.toText}")
             s"'$keyword' を含む条文 (${hits.size}件):\n${lines.mkString("\n")}"
+          case Left(err) => err
+        }
+
+      case "get_law_metadata" =>
+        val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
+
+        val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+          case ResolveResult.Resolved(id) => Right(id)
+          case ResolveResult.Ambiguous(candidates) =>
+            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。")
+          case ResolveResult.NotFound =>
+            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+        }
+
+        resolvedLawId.flatMap { lawId =>
+          lawDataRepo.getMetadata(lawId)
+        } match {
+          case Right(meta) => meta.toText
           case Left(err) => err
         }
 
@@ -167,6 +220,39 @@ class ToolDispatch(
       )
     ))
 
+  private val getArticleRangeDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("get_article_range"),
+      "description" -> Json.fromString(
+        "法令の連続する条文を範囲指定で一括取得する。" +
+        "開始条番号と終了条番号を指定すると、その範囲内の全条文（枝番号含む）をまとめて返す。" +
+        "周辺条文の確認や比較に適している。範囲は50条以内で指定すること。" +
+        "条文番号が分かっている場合に使う。分からない場合は search_within_law を使うこと。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("法令IDまたは法令名。例: 129AC0000000089, 民法")
+          ),
+          "from_article" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("開始条番号（アラビア数字）。例: 709")
+          ),
+          "to_article" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("終了条番号（アラビア数字）。例: 724")
+          )
+        ),
+        "required" -> Json.arr(
+          Json.fromString("law_id"),
+          Json.fromString("from_article"),
+          Json.fromString("to_article")
+        )
+      )
+    ))
+
   private val searchWithinLawDef: Json = Json.obj(
     "type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("search_within_law"),
@@ -192,6 +278,25 @@ class ToolDispatch(
           )
         ),
         "required" -> Json.arr(Json.fromString("law_id"), Json.fromString("keyword"))
+      )
+    ))
+
+  private val getMetadataDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("get_law_metadata"),
+      "description" -> Json.fromString(
+        "法令のメタデータ（法令名、法令番号、種別、公布日、規模）を取得する。" +
+        "法令の全体像を把握するために使う。条文の内容は含まない。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("法令IDまたは法令名。例: 129AC0000000089, 民法")
+          )
+        ),
+        "required" -> Json.arr(Json.fromString("law_id"))
       )
     ))
 

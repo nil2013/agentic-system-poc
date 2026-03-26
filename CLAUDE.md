@@ -158,27 +158,23 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 
 ## Instant Handover (DELETE AFTER READING)
 
-> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-25_session.md` をサブエージェントで参照。
+> **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-26_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **V1/V2 バックエンド切り替え基盤（Phase 1）実装完了**
-  - `EGovLawApi` trait + `Capability` enum + `EGovBackendFactory`
-  - `ToolDispatch` class 化: capabilities ベースの動的ツールリスト生成
-  - `--egov-api v1|v2` CLI arg + `EGOV_API_VERSION` env var
-  - V2Client はスケルトン（`capabilities = Set(KeywordSearch)` のみ宣言）
-- **e-Gov ドキュメンテーション α版スクレイピング**（7ページ、`docs/egov-api/docs-alpha/`）
-- **V2 ドメインリファレンス作成**（`docs/egov-api/v2/domain-reference.md`）
-- **docs/egov-api/ ディレクトリ再整理**: v1/, v2/, docs-alpha/ + 3つの CLAUDE.md ルーティング
-- **V1 vs V2 比較評価**: V2 の `/keyword` が 196条ハルシネーション問題を構造的に解消
+- **search_within_law ツール実装**: V1/V2 共通の法令内キーワード検索（`LawDataRepository` + FIFO キャッシュ）
+- **KV キャッシュ分析**: Hybrid Attention-SSM 発見（10/40層のみ attention）。262K context で VRAM ~27GB
+- **法令要約実験（Stage EX）**: 5条件の並列度比較。C2（2並列×3バッチ, 248s）がパレート最適
+- **構造化ツール応答の検証**: [RESULT]/[NUDGE]/[ERROR] タグ + SP 条件分岐で LLM 行動制御が可能
+- **アーキテクチャ設計ノート**: PoC → バルク DB 構想、定義規定の4パターン +「いう。）」戦略、ナッジパターン
 
 ### 次のアクション（優先順）
-1. **V2Client 実装（Phase 2）**: `/keyword` エンドポイントが最優先（EX-1a 直結）
-2. `egov-law-client-design.md` を新アーキテクチャ（trait 体制）に更新
-3. 統合テスト（IntegrationTest）の V1 バックエンド実行確認
-4. MAX_TOOL_ROUNDS 動的調整（V2 のツール増加に伴い 5→拡張）
+1. **ツール拡張実装**: B(get_article_range) → E(get_law_metadata) → get_law_structure → A(get_definitions)
+2. ナッジタグシステムの ToolDispatch 統合（A 実装時）
+3. `egov-law-client-design.md` を新アーキテクチャに更新
+4. V2Client 実装（Phase 2）: `/keyword` エンドポイント
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること
-- `max_tokens` は 4096 以上を指定すること（thinking mode 対策）
-- mmproj なしで VRAM ~21.7GB（Q4_K_M）。mmproj ありだと ~28GB
+- `-c 262144` 推奨（ネイティブコンテキスト長。VRAM ~27GB）
+- `max_tokens` は 8192 以上を指定すること（Thinking が 55-70% 消費）
 - **e-Gov API バージョン切り替え**: `--egov-api v2` or `EGOV_API_VERSION=v2`（デフォルト v1）

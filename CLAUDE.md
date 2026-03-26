@@ -166,17 +166,19 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 - **法令要約実験（Stage EX）**: C2（2並列×3バッチ）がパレート最適
 - **構造化ツール応答の検証**: [RESULT]/[NUDGE]/[ERROR] タグで LLM 行動制御可能
 - **アーキテクチャ設計ノート**: バルク DB 構想、「いう。）」定義抽出、ナッジパターン
-- **Phase 1 ツール拡充（T1-T4）完了**:
+- **Phase 1 ツール拡充（T1-T4）+ T5 完了**:
   - T1: MAX_TOOL_ROUNDS 5→15
   - T2: Spinner（ドットアニメーション）
   - T3: `get_article_range`（条文範囲一括取得、枝番号対応）
   - T4: `get_law_metadata`（法令メタデータ）
+  - T5: `get_law_structure`（TOC 抽出 + MainProvision フォールバック）
+- **ツールルーティング観察**: LLM が構造質問でツールを自発的に使わない → SP チューニング必要
 
 ### 次のアクション（優先順）
-1. **Phase 2 (T5-T6)**: `get_law_structure` + `get_definitions`（ナッジタグシステム含む）
-2. **Phase 3 (T7)**: Thinking tail ストリーミング表示
-3. `egov-law-client-design.md` を新アーキテクチャに更新
-4. V2Client 実装: `/keyword` エンドポイント
+1. **T6: get_definitions + ナッジタグシステム**: deterministic 部分は Plan で設計、SP は curl 試行錯誤
+2. **SP チューニング**: ツール使い分けガイド + ナッジ遵守指示（T6 と同時に）
+3. **T7**: Thinking tail ストリーミング表示
+4. `egov-law-client-design.md` を新アーキテクチャに更新
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

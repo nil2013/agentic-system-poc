@@ -52,23 +52,39 @@ class LawDataRepository(api: EGovLawApi) {
     */
   def searchWithinLaw(lawId: String, keyword: String, maxResults: Int = 10): Either[String, List[SearchHit]] = {
     getLawData(lawId).map { root =>
-      val articles = root \\ "Article"
+      val law = (root \\ "Law").headOption.getOrElse(root)
+      val lawBody = law \ "LawBody"
 
-      val hits = articles.flatMap { article =>
-        val title = (article \ "ArticleTitle").text.trim
-        val caption = (article \ "ArticleCaption").text.trim
-        val paragraphs = article \ "Paragraph"
-
-        paragraphs.flatMap { para =>
-          val paraNum = (para \ "@Num").text.trim
-          val sentences = (para \\ "Sentence").map(_.text.trim).filter(_.nonEmpty)
-          sentences.filter(_.contains(keyword)).map { s =>
-            SearchHit(title, caption, paraNum, s)
-          }
-        }
+      // 本則の Article を走査
+      val mainHits = (lawBody \ "MainProvision").flatMap { mp =>
+        searchArticlesIn(mp \\ "Article", keyword, "本則")
       }
 
-      hits.take(maxResults).toList
+      // 附則の Article を走査（各 SupplProvision ごとに出典を付与）
+      val supplHits = (lawBody \ "SupplProvision").flatMap { sp =>
+        val amendNum = sp.attribute("AmendLawNum").map(_.text).getOrElse("")
+        val source = if (amendNum.nonEmpty) s"附則（$amendNum）" else "附則"
+        searchArticlesIn(sp \\ "Article", keyword, source)
+      }
+
+      (mainHits ++ supplHits).take(maxResults).toList
+    }
+  }
+
+  /** Article のリストからキーワードにマッチする SearchHit を生成する。 */
+  private def searchArticlesIn(articles: scala.xml.NodeSeq, keyword: String, source: String): Seq[SearchHit] = {
+    articles.flatMap { article =>
+      val title = (article \ "ArticleTitle").text.trim
+      val caption = (article \ "ArticleCaption").text.trim
+      val paragraphs = article \ "Paragraph"
+
+      paragraphs.flatMap { para =>
+        val paraNum = (para \ "@Num").text.trim
+        val sentences = (para \\ "Sentence").map(_.text.trim).filter(_.nonEmpty)
+        sentences.filter(_.contains(keyword)).map { s =>
+          SearchHit(title, caption, paraNum, s, source)
+        }
+      }
     }
   }
 

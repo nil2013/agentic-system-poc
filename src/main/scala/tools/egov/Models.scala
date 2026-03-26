@@ -70,18 +70,22 @@ case class ArticleContent(
   * @param articleCaption 条文見出し（例: `"（訴訟記録の閲覧等）"`）。見出しがない条文では空文字列。
   * @param paragraphNum   項番号（例: `"1"`, `"2"`）
   * @param snippet        マッチした文のテキスト
+  * @param source         出典区分。`"本則"` / `"附則"` / `"附則（平成29年法律44号）"` 等。
+  *                       Article の XML 親要素から判定。
   */
 case class SearchHit(
     articleTitle: String,
     articleCaption: String,
     paragraphNum: String,
-    snippet: String
+    snippet: String,
+    source: String = "本則"
 ) {
   /** LLM へのツール結果として返す1行テキスト。 */
   def toText: String = {
+    val sourcePrefix = if (source != "本則") s"[$source] " else ""
     val loc = List(articleTitle, articleCaption).filter(_.nonEmpty).mkString(" ")
     val para = if (paragraphNum.nonEmpty && paragraphNum != "1") s"第${paragraphNum}項" else ""
-    val prefix = List(loc, para).filter(_.nonEmpty).mkString(" ")
+    val prefix = List(sourcePrefix + loc, para).filter(_.nonEmpty).mkString(" ")
     s"$prefix: ${snippet.take(120)}"
   }
 }

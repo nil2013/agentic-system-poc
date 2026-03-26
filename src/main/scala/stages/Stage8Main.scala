@@ -121,7 +121,15 @@ object Stage8Main {
         turnNum += 1
         state.add(ChatMessage.User(line))
 
-        val (result, updatedMessages) = AgentLoop.runTurn(state.messages, config)
+        val (result, updatedMessages) = try {
+          AgentLoop.runTurn(state.messages, config)
+        } catch {
+          case e: Exception =>
+            println(s"\n  [Error] ${e.getClass.getSimpleName}: ${e.getMessage}")
+            println("  (セッションは継続します。再度質問してください。)")
+            val fb: ChatMessage.Assistant = ChatMessage.Assistant(Some(s"(エラーが発生しました: ${e.getMessage})"), Nil)
+            (agent.TurnResult(fb, Nil, 0, None), state.messages :+ fb)
+        }
 
         // 新メッセージを state に追加
         val newMessages = updatedMessages.drop(state.messageCount)

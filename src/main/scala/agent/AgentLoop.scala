@@ -19,7 +19,7 @@ import io.circe.syntax.*
 case class AgentConfig(
     baseUrl: String = sys.env.getOrElse("LLM_BASE_URL", "http://localhost:8080/v1"),
     model: String = sys.env.getOrElse("LLM_MODEL", "local"),
-    maxTokens: Int = 4096,
+    maxTokens: Int = 16384,
     maxToolRounds: Int = 15,
     temperature: Double = 0.0,
     timeoutSeconds: Int = 120,

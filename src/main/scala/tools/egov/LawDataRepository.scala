@@ -146,6 +146,160 @@ class LawDataRepository(api: EGovLawApi) {
     }
   }
 
+  /** 法令の構造（目次）を取得する（キャッシュあり）。
+    *
+    * TOC 要素がある場合はそれを使用（Strategy A）。
+    * ない場合は MainProvision から構造を再構成（Strategy B）。
+    */
+  def getStructure(lawId: String): Either[String, String] = {
+    getLawData(lawId).map { root =>
+      val law = (root \\ "Law").headOption.getOrElse(root)
+      val lawBody = law \ "LawBody"
+      val lawName = (lawBody \ "LawTitle").text.trim
+      val lawNum = (law \ "LawNum").text.trim
+
+      val header = s"目次: $lawName（$lawNum）\n"
+
+      val toc = (lawBody \ "TOC").headOption
+      val body = toc match {
+        case Some(tocElem) => formatToc(tocElem)
+        case None => formatFromMainProvision(lawBody)
+      }
+
+      header + "\n" + body
+    }
+  }
+
+  /** TOC 要素からインデント付き構造テキストを生成する（Strategy A） */
+  private def formatToc(toc: Node): String = {
+    val sb = new StringBuilder
+    for (child <- toc.child) {
+      child match {
+        case elem: scala.xml.Elem => formatTocElement(elem, 0, sb)
+        case _ =>
+      }
+    }
+    sb.toString
+  }
+
+  private def formatTocElement(elem: scala.xml.Elem, depth: Int, sb: StringBuilder): Unit = {
+    val indent = "  " * depth
+    val prefix = if (depth == 0) "■ " else "├ "
+
+    elem.label match {
+      case "TOCPart" =>
+        val title = (elem \ "PartTitle").text.trim
+        sb.append(s"$indent$prefix$title\n")
+        elem.child.foreach {
+          case e: scala.xml.Elem if e.label.startsWith("TOC") => formatTocElement(e, depth + 1, sb)
+          case _ =>
+        }
+      case "TOCChapter" =>
+        val title = (elem \ "ChapterTitle").text.trim
+        val range = (elem \ "ArticleRange").text.trim
+        val rangeStr = if (range.nonEmpty) s" $range" else ""
+        sb.append(s"$indent$prefix$title$rangeStr\n")
+        elem.child.foreach {
+          case e: scala.xml.Elem if e.label.startsWith("TOC") => formatTocElement(e, depth + 1, sb)
+          case _ =>
+        }
+      case "TOCSection" =>
+        val title = (elem \ "SectionTitle").text.trim
+        val range = (elem \ "ArticleRange").text.trim
+        val rangeStr = if (range.nonEmpty) s" $range" else ""
+        sb.append(s"$indent$prefix$title$rangeStr\n")
+        elem.child.foreach {
+          case e: scala.xml.Elem if e.label.startsWith("TOC") => formatTocElement(e, depth + 1, sb)
+          case _ =>
+        }
+      case "TOCSubsection" =>
+        val title = (elem \ "SubsectionTitle").text.trim
+        val range = (elem \ "ArticleRange").text.trim
+        val rangeStr = if (range.nonEmpty) s" $range" else ""
+        sb.append(s"$indent$prefix$title$rangeStr\n")
+        elem.child.foreach {
+          case e: scala.xml.Elem if e.label.startsWith("TOC") => formatTocElement(e, depth + 1, sb)
+          case _ =>
+        }
+      case "TOCDivision" =>
+        val title = (elem \ "DivisionTitle").text.trim
+        val range = (elem \ "ArticleRange").text.trim
+        val rangeStr = if (range.nonEmpty) s" $range" else ""
+        sb.append(s"$indent$prefix$title$rangeStr\n")
+      case "TOCSupplProvision" =>
+        val label = (elem \ "SupplProvisionLabel").text.trim
+        val range = (elem \ "ArticleRange").text.trim
+        val rangeStr = if (range.nonEmpty) s" $range" else ""
+        val displayLabel = if (label.nonEmpty) label else "附則"
+        sb.append(s"$indent■ $displayLabel$rangeStr\n")
+      case "TOCArticle" =>
+        val title = (elem \ "ArticleTitle").text.trim
+        val caption = (elem \ "ArticleCaption").text.trim
+        val display = List(title, caption).filter(_.nonEmpty).mkString(" ")
+        sb.append(s"$indent$prefix$display\n")
+      case _ => // TOCLabel, TOCPreambleLabel, etc. — skip
+    }
+  }
+
+  /** MainProvision から構造を再構成する（Strategy B: TOC なしのフォールバック） */
+  private def formatFromMainProvision(lawBody: NodeSeq): String = {
+    val sb = new StringBuilder
+    val mainProvision = (lawBody \ "MainProvision").headOption
+
+    mainProvision match {
+      case Some(mp) =>
+        formatStructureElement(mp, 0, sb)
+      case None =>
+        sb.append("（本則なし）\n")
+    }
+
+    // 附則のカウント
+    val supplCount = (lawBody \ "SupplProvision").size
+    if (supplCount > 0) {
+      sb.append(s"■ 附則（${supplCount}本）\n")
+    }
+
+    sb.toString
+  }
+
+  private def formatStructureElement(elem: Node, depth: Int, sb: StringBuilder): Unit = {
+    val indent = "  " * depth
+    val prefix = if (depth == 0) "" else "├ "
+
+    elem match {
+      case e: scala.xml.Elem =>
+        e.label match {
+          case "Part" =>
+            val title = (e \ "PartTitle").text.trim
+            sb.append(s"$indent■ $title\n")
+            e.child.foreach { c => formatStructureElement(c, depth + 1, sb) }
+          case "Chapter" =>
+            val title = (e \ "ChapterTitle").text.trim
+            val articles = e \\ "Article"
+            val range = if (articles.nonEmpty) {
+              val first = (articles.head \ "ArticleTitle").text.trim
+              val last = (articles.last \ "ArticleTitle").text.trim
+              if (first == last) s"（$first）" else s"（$first〜$last）"
+            } else ""
+            sb.append(s"$indent$prefix$title $range\n")
+            e.child.foreach { c => formatStructureElement(c, depth + 1, sb) }
+          case "Section" =>
+            val title = (e \ "SectionTitle").text.trim
+            val articles = e \\ "Article"
+            val range = if (articles.nonEmpty) {
+              val first = (articles.head \ "ArticleTitle").text.trim
+              val last = (articles.last \ "ArticleTitle").text.trim
+              if (first == last) s"（$first）" else s"（$first〜$last）"
+            } else ""
+            sb.append(s"$indent$prefix$title $range\n")
+          case "MainProvision" =>
+            e.child.foreach { c => formatStructureElement(c, depth, sb) }
+          case _ => // Article, Paragraph, etc. — skip at structure level
+        }
+      case _ =>
+    }
+  }
+
   /** テスト用: キャッシュをクリアする。 */
   private[egov] def clearCache(): Unit = {
     cache = Map.empty

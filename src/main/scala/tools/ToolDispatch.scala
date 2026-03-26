@@ -30,7 +30,7 @@ class ToolDispatch(
 
   /** バックエンドの能力に基づいて動的に生成されるツール定義 JSON。 */
   def toolDefs: Json = {
-    val base = List(findLawsDef, getArticleDef, getArticleRangeDef, searchWithinLawDef, getMetadataDef, calculateDef)
+    val base = List(findLawsDef, getArticleDef, getArticleRangeDef, searchWithinLawDef, getStructureDef, getMetadataDef, calculateDef)
     val extra = if (capabilities.contains(Capability.KeywordSearch)) {
       List(searchKeywordDef)
     } else {
@@ -138,6 +138,25 @@ class ToolDispatch(
           case Right(hits) =>
             val lines = hits.map(h => s"- ${h.toText}")
             s"'$keyword' を含む条文 (${hits.size}件):\n${lines.mkString("\n")}"
+          case Left(err) => err
+        }
+
+      case "get_law_structure" =>
+        val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
+
+        val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+          case ResolveResult.Resolved(id) => Right(id)
+          case ResolveResult.Ambiguous(candidates) =>
+            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。")
+          case ResolveResult.NotFound =>
+            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+        }
+
+        resolvedLawId.flatMap { lawId =>
+          lawDataRepo.getStructure(lawId)
+        } match {
+          case Right(structure) => structure
           case Left(err) => err
         }
 
@@ -278,6 +297,25 @@ class ToolDispatch(
           )
         ),
         "required" -> Json.arr(Json.fromString("law_id"), Json.fromString("keyword"))
+      )
+    ))
+
+  private val getStructureDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("get_law_structure"),
+      "description" -> Json.fromString(
+        "法令の章・節・款の構造（目次）を表示する。法令全体の構成を把握したいときに使う。" +
+        "条文の内容は含まない。構造を確認してから get_article_range で条文を取得する流れが効果的。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("法令IDまたは法令名。例: 129AC0000000089, 民法")
+          )
+        ),
+        "required" -> Json.arr(Json.fromString("law_id"))
       )
     ))
 

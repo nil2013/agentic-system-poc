@@ -37,13 +37,13 @@ brew install Virtuslab/scala-cli/scala-cli  # 未導入の場合
 ```bash
 # GPU WS 側: llama-server 起動例
 llama-server \
-  -m <model.gguf> \
+  -m Qwen3.5-35B-A3B-UD-Q4_K_XL.gguf \
   --host 0.0.0.0 --port 8080 \
-  -ngl 99 -c 8192 --jinja -fa on
+  -ngl 99 -c 262144 --jinja -fa on
 ```
 
 - `--jinja` は Stage 2 以降の tool calling に**必須**
-- `-c 8192`: 32GB VRAM でモデル(~20GB)ロード後、KVキャッシュに使える残量から 8192〜16384 が現実的
+- `-c 262144`: モデルのネイティブコンテキスト長。Hybrid Attention-SSM アーキテクチャにより KV キャッシュが軽量（10/40 層のみ attention、残り SSM）。262K で VRAM ~27GB（実測）。詳細は `docs/research/2026-03-26_qwen35-35b-kv-cache-analysis.md`
 - API エンドポイント: `http://<GPU-WS-IP>:8080/v1/chat/completions`
 
 ### 自宅: mlx-lm (Mac ローカル)

@@ -231,7 +231,8 @@ class ToolDispatch(
       "name" -> Json.fromString("find_laws"),
       "description" -> Json.fromString(
         "法令名にキーワードを含む法令を検索する。法令の正式名称、法令ID、法令番号を返す。" +
-        "法令IDは get_article で条文を取得する際に必要。"
+        "法令名が不明な場合や、キーワードで法令を探したい場合に使う。" +
+        "法令名が分かっている場合は他のツールに法令名を直接指定できるため、find_laws は不要。"
       ),
       "parameters" -> Json.obj(
         "type" -> Json.fromString("object"),
@@ -309,7 +310,7 @@ class ToolDispatch(
       "name" -> Json.fromString("search_within_law"),
       "description" -> Json.fromString(
         "特定の法令の条文内容をキーワードで検索する。条番号が不明な場合に使う。" +
-        "find_laws で法令IDを取得してから使用する。" +
+        "法令名を直接指定可能（find_laws は不要）。" +
         "条番号が分かっている場合は get_article を使うこと。"
       ),
       "parameters" -> Json.obj(
@@ -337,7 +338,7 @@ class ToolDispatch(
       "name" -> Json.fromString("get_definitions"),
       "description" -> Json.fromString(
         "法令内の用語の定義を検索する。定義条文（第2条型）と本文中の定義（「○○」という。）パターンを検索する。" +
-        "用語の正式な定義を確認したいときに使う。"
+        "用語の正式な定義を確認したいときに使う。法令名を直接指定可能（find_laws は不要）。"
       ),
       "parameters" -> Json.obj(
         "type" -> Json.fromString("object"),
@@ -360,6 +361,7 @@ class ToolDispatch(
       "name" -> Json.fromString("get_law_structure"),
       "description" -> Json.fromString(
         "法令の章・節・款の構造（目次）を表示する。法令全体の構成を把握したいときに使う。" +
+        "法令名を直接指定可能（find_laws は不要）。" +
         "条文の内容は含まない。構造を確認してから get_article_range で条文を取得する流れが効果的。"
       ),
       "parameters" -> Json.obj(
@@ -379,7 +381,7 @@ class ToolDispatch(
       "name" -> Json.fromString("get_law_metadata"),
       "description" -> Json.fromString(
         "法令のメタデータ（法令名、法令番号、種別、公布日、規模）を取得する。" +
-        "法令の全体像を把握するために使う。条文の内容は含まない。"
+        "法令の全体像を把握するために使う。法令名を直接指定可能（find_laws は不要）。条文の内容は含まない。"
       ),
       "parameters" -> Json.obj(
         "type" -> Json.fromString("object"),

@@ -61,12 +61,36 @@ T-2 が直行できた理由: `get_article` の description に「法令IDまた
 
 ### 改善候補
 
-**A. ツール description の統一**: `get_article` の「法令IDまたは法令名」パターンを全ツールの law_id description に明記
-- 現在: `"法令IDまたは法令名。例: 129AC0000000089, 民法"` — 一部のツールにはあるが簡略化されている
-
+**A. ツール description の統一**: 各ツールの description に「法令名を直接指定可能（find_laws は不要）」を明記
 **B. SP にツール選択ガイドを追加**: 「法令名が分かっている場合は find_laws を経由せず直接ツールに渡してよい」
+**C. find_laws の description 変更**: 「法令名が分かっている場合は他のツールに直接指定できるため find_laws は不要」
 
-**C. ツール description に「find_laws 不要」を明記**: 各ツールの description に「法令名を直接指定可能。find_laws は不要。」を追加
+---
+
+## 改善 A 適用後の再テスト結果
+
+### 変更内容
+
+全ツールの description に「法令名を直接指定可能（find_laws は不要）」を追加。
+`find_laws` の description を「法令名が不明な場合やキーワードで探したい場合に使う」に変更。
+`search_within_law` の「find_laws で法令IDを取得してから使用する」を削除。
+
+### 再テスト結果
+
+| ID | 質問 | Before | **After** | 判定 |
+|----|------|--------|----------|------|
+| T-2 | 民法709条を見せて | `get_article` ✅ | (変更なし) | ✅ |
+| T-3 | 民法の不法行為に関する条文を全部見せて | `find_laws` ⚠️ | **`get_law_structure`** | ✅ |
+| T-4 | 消費者契約法の全体構造を教えて | `find_laws` ⚠️ | **`get_law_structure`** | ✅ |
+| T-5 | 個人情報保護法で「個人情報」の定義は？ | `find_laws` ⚠️ | **`get_definitions`** | ✅ |
+| T-6 | 行政手続法はどのくらいの規模の法律？ | `find_laws` ⚠️ | **`get_law_metadata`** | ✅ |
+| T-7 | 民法で「善意」はどういう意味？ | `find_laws` ⚠️ | **`get_definitions`** | ✅ |
+
+### 結論
+
+**description の「法令名を直接指定可能（find_laws は不要）」の一文で find_laws 偏重が完全に解消。** SP チューニング（改善 B）は不要だった。
+
+T-3 は `search_within_law` ではなく `get_law_structure` を選んだが、「全部見せて」→「まず構造把握」は合理的な探索戦略。
 
 ---
 

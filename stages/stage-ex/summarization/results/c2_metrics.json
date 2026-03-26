@@ -1,0 +1,105 @@
+{
+  "condition" : "C2",
+  "strategy" : "map-reduce",
+  "parallelism" : "2-parallel x 3-batches",
+  "timestamp" : "2026-03-26T11:01:37.583735",
+  "config" : {
+    "model" : "local",
+    "max_tokens" : 8192,
+    "base_url" : "http://192.168.11.99:8989/v1"
+  },
+  "phase1" : {
+    "wall_time_ms" : 195983,
+    "parts" : [
+      {
+        "name" : "第一編　総則",
+        "input_chars" : 19284,
+        "prompt_tokens" : 11232,
+        "completion_tokens" : 4687,
+        "wall_time_ms" : 61635,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 2468,
+        "server_pp_tok_per_sec" : 128.94075172458255,
+        "server_tg_tok_per_sec" : 81.55742490130717
+      },
+      {
+        "name" : "第二編　物権",
+        "input_chars" : 39184,
+        "prompt_tokens" : 22767,
+        "completion_tokens" : 5085,
+        "wall_time_ms" : 65465,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 3571,
+        "server_pp_tok_per_sec" : 159.02043412578516,
+        "server_tg_tok_per_sec" : 82.805162059147
+      },
+      {
+        "name" : "第三編　債権",
+        "input_chars" : 68286,
+        "prompt_tokens" : 39194,
+        "completion_tokens" : 4172,
+        "wall_time_ms" : 54808,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 3236,
+        "server_pp_tok_per_sec" : 153.20387605806425,
+        "server_tg_tok_per_sec" : 85.06542330324453
+      },
+      {
+        "name" : "第四編　親族",
+        "input_chars" : 26998,
+        "prompt_tokens" : 16146,
+        "completion_tokens" : 3735,
+        "wall_time_ms" : 50509,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 2391,
+        "server_pp_tok_per_sec" : 123.23618214307722,
+        "server_tg_tok_per_sec" : 83.36412523635181
+      },
+      {
+        "name" : "第五編　相続",
+        "input_chars" : 28782,
+        "prompt_tokens" : 17163,
+        "completion_tokens" : 4785,
+        "wall_time_ms" : 63828,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 2627,
+        "server_pp_tok_per_sec" : 125.69130216189039,
+        "server_tg_tok_per_sec" : 81.98924516999814
+      },
+      {
+        "name" : "附則",
+        "input_chars" : 41798,
+        "prompt_tokens" : 24691,
+        "completion_tokens" : 5980,
+        "wall_time_ms" : 75689,
+        "finish_reason" : "stop",
+        "has_content" : true,
+        "output_chars" : 3726,
+        "server_pp_tok_per_sec" : 156.87504902345282,
+        "server_tg_tok_per_sec" : 85.16217683980136
+      }
+    ]
+  },
+  "phase2" : {
+    "name" : "combine",
+    "input_chars" : 18019,
+    "prompt_tokens" : 11806,
+    "completion_tokens" : 4629,
+    "wall_time_ms" : 51705,
+    "finish_reason" : "stop",
+    "has_content" : true,
+    "output_chars" : 3786,
+    "server_pp_tok_per_sec" : 2208.174810534823,
+    "server_tg_tok_per_sec" : 100.98744736282922
+  },
+  "total" : {
+    "wall_time_ms" : 247688,
+    "prompt_tokens" : 142999,
+    "completion_tokens" : 33073
+  }
+}

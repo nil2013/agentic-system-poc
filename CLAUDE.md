@@ -161,17 +161,22 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
 > **For next session**: 以下を確認してから作業再開。詳細は `.claude/logs/2026-03-26_session.md` をサブエージェントで参照。
 
 ### 本セッションの成果
-- **search_within_law ツール実装**: V1/V2 共通の法令内キーワード検索（`LawDataRepository` + FIFO キャッシュ）
-- **KV キャッシュ分析**: Hybrid Attention-SSM 発見（10/40層のみ attention）。262K context で VRAM ~27GB
-- **法令要約実験（Stage EX）**: 5条件の並列度比較。C2（2並列×3バッチ, 248s）がパレート最適
-- **構造化ツール応答の検証**: [RESULT]/[NUDGE]/[ERROR] タグ + SP 条件分岐で LLM 行動制御が可能
-- **アーキテクチャ設計ノート**: PoC → バルク DB 構想、定義規定の4パターン +「いう。）」戦略、ナッジパターン
+- **search_within_law ツール実装**: V1/V2 共通の法令内キーワード検索
+- **KV キャッシュ分析**: Hybrid Attention-SSM 発見。262K context、VRAM ~27GB
+- **法令要約実験（Stage EX）**: C2（2並列×3バッチ）がパレート最適
+- **構造化ツール応答の検証**: [RESULT]/[NUDGE]/[ERROR] タグで LLM 行動制御可能
+- **アーキテクチャ設計ノート**: バルク DB 構想、「いう。）」定義抽出、ナッジパターン
+- **Phase 1 ツール拡充（T1-T4）完了**:
+  - T1: MAX_TOOL_ROUNDS 5→15
+  - T2: Spinner（ドットアニメーション）
+  - T3: `get_article_range`（条文範囲一括取得、枝番号対応）
+  - T4: `get_law_metadata`（法令メタデータ）
 
 ### 次のアクション（優先順）
-1. **ツール拡張実装**: B(get_article_range) → E(get_law_metadata) → get_law_structure → A(get_definitions)
-2. ナッジタグシステムの ToolDispatch 統合（A 実装時）
+1. **Phase 2 (T5-T6)**: `get_law_structure` + `get_definitions`（ナッジタグシステム含む）
+2. **Phase 3 (T7)**: Thinking tail ストリーミング表示
 3. `egov-law-client-design.md` を新アーキテクチャに更新
-4. V2Client 実装（Phase 2）: `/keyword` エンドポイント
+4. V2Client 実装: `/keyword` エンドポイント
 
 ### 運用上の注意
 - llama-server は `--jinja -fa on` で起動すること

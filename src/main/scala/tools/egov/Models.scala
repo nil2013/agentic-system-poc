@@ -64,6 +64,28 @@ case class ArticleContent(
   }
 }
 
+/** 法令内キーワード検索のヒット結果。[[LawDataRepository.searchWithinLaw]] の返却型。
+  *
+  * @param articleTitle   条文タイトル（漢数字、例: `"第九十一条"`）
+  * @param articleCaption 条文見出し（例: `"（訴訟記録の閲覧等）"`）。見出しがない条文では空文字列。
+  * @param paragraphNum   項番号（例: `"1"`, `"2"`）
+  * @param snippet        マッチした文のテキスト
+  */
+case class SearchHit(
+    articleTitle: String,
+    articleCaption: String,
+    paragraphNum: String,
+    snippet: String
+) {
+  /** LLM へのツール結果として返す1行テキスト。 */
+  def toText: String = {
+    val loc = List(articleTitle, articleCaption).filter(_.nonEmpty).mkString(" ")
+    val para = if (paragraphNum.nonEmpty && paragraphNum != "1") s"第${paragraphNum}項" else ""
+    val prefix = List(loc, para).filter(_.nonEmpty).mkString(" ")
+    s"$prefix: ${snippet.take(120)}"
+  }
+}
+
 /** [[LawRepository.resolveLawId]] の返却型。法令名→lawId の解決結果を表す。
   *
   * 解決の優先順位:

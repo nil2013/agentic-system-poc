@@ -35,12 +35,13 @@ object Prompts {
     * V2 モード（KeywordSearch あり）: search_keyword ツールの案内
     */
   def capabilityNotice(capabilities: Set[Capability]): String = {
+    val base = "条番号が不明な場合は search_within_law で特定法令内の条文をキーワード検索できます。" +
+      "条番号を推測せず、まずツールで検索してください。"
     if (capabilities.contains(Capability.KeywordSearch)) {
-      "条文内容のキーワード検索が利用可能です（search_keyword ツール）。" +
-      "条番号が不明な場合は、まず search_keyword で該当条文を検索してください。"
+      base + "\n" +
+      "法令横断のキーワード検索も利用可能です（search_keyword ツール）。"
     } else {
-      "注意: 条文内容のキーワード検索は現在利用できません。" +
-      "条番号が不明な場合は、推測せずにユーザーに条番号を確認してください。"
+      base
     }
   }
 }

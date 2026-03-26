@@ -24,12 +24,13 @@ import io.circe.{Json, JsonObject}
 class ToolDispatch(
     lawRepo: LawRepository,
     articleRepo: ArticleRepository,
+    lawDataRepo: LawDataRepository,
     capabilities: Set[Capability]
 ) {
 
   /** バックエンドの能力に基づいて動的に生成されるツール定義 JSON。 */
   def toolDefs: Json = {
-    val base = List(findLawsDef, getArticleDef, calculateDef)
+    val base = List(findLawsDef, getArticleDef, searchWithinLawDef, calculateDef)
     val extra = if (capabilities.contains(Capability.KeywordSearch)) {
       List(searchKeywordDef)
     } else {
@@ -78,6 +79,31 @@ class ToolDispatch(
 
         result match {
           case Right(content) => content.toText
+          case Left(err) => err
+        }
+
+      case "search_within_law" =>
+        val lawIdOrName = args("law_id").flatMap(_.asString).getOrElse("")
+        val keyword = args("keyword").flatMap(_.asString).getOrElse("")
+        val maxResults = args("max_results").flatMap(_.asNumber).flatMap(_.toInt).getOrElse(10)
+
+        val resolvedLawId = lawRepo.resolveLawId(lawIdOrName) match {
+          case ResolveResult.Resolved(id) => Right(id)
+          case ResolveResult.Ambiguous(candidates) =>
+            val names = candidates.map(c => s"${c.lawName} [ID: ${c.lawId}]").mkString(", ")
+            Left(s"エラー: '$lawIdOrName' に該当する法令が複数あります: $names。法令IDを指定してください。")
+          case ResolveResult.NotFound =>
+            Left(s"エラー: '$lawIdOrName' に該当する法令が見つかりません。find_laws で法令IDを確認してください。")
+        }
+
+        resolvedLawId.flatMap { lawId =>
+          lawDataRepo.searchWithinLaw(lawId, keyword, maxResults)
+        } match {
+          case Right(hits) if hits.isEmpty =>
+            s"'$keyword' を含む条文は見つかりませんでした。"
+          case Right(hits) =>
+            val lines = hits.map(h => s"- ${h.toText}")
+            s"'$keyword' を含む条文 (${hits.size}件):\n${lines.mkString("\n")}"
           case Left(err) => err
         }
 
@@ -141,6 +167,34 @@ class ToolDispatch(
       )
     ))
 
+  private val searchWithinLawDef: Json = Json.obj(
+    "type" -> Json.fromString("function"), "function" -> Json.obj(
+      "name" -> Json.fromString("search_within_law"),
+      "description" -> Json.fromString(
+        "特定の法令の条文内容をキーワードで検索する。条番号が不明な場合に使う。" +
+        "find_laws で法令IDを取得してから使用する。" +
+        "条番号が分かっている場合は get_article を使うこと。"
+      ),
+      "parameters" -> Json.obj(
+        "type" -> Json.fromString("object"),
+        "properties" -> Json.obj(
+          "law_id" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("検索対象の法令IDまたは法令名。例: 408AC0000000109, 民事訴訟法")
+          ),
+          "keyword" -> Json.obj(
+            "type" -> Json.fromString("string"),
+            "description" -> Json.fromString("検索キーワード。例: 訴訟記録の閲覧, 損害賠償, 婚姻")
+          ),
+          "max_results" -> Json.obj(
+            "type" -> Json.fromString("integer"),
+            "description" -> Json.fromString("最大結果数（省略時: 10）")
+          )
+        ),
+        "required" -> Json.arr(Json.fromString("law_id"), Json.fromString("keyword"))
+      )
+    ))
+
   private val calculateDef: Json = Json.obj(
     "type" -> Json.fromString("function"), "function" -> Json.obj(
       "name" -> Json.fromString("calculate"),
@@ -191,7 +245,8 @@ object ToolDispatch {
   def forBackend(api: EGovLawApi): ToolDispatch = {
     val lawRepo = new LawRepository(api)
     val articleRepo = new ArticleRepository(api)
-    new ToolDispatch(lawRepo, articleRepo, api.capabilities)
+    val lawDataRepo = new LawDataRepository(api)
+    new ToolDispatch(lawRepo, articleRepo, lawDataRepo, api.capabilities)
   }
 
   /** V1 バックエンドのデフォルトインスタンス。

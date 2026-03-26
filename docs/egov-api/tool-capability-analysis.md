@@ -85,6 +85,46 @@
 }
 ```
 
+**設計ステータス: OPEN** — XSD（`XMLSchemaForJapaneseLaw_v3.xsd`）および `docs-alpha/xml-schema.md` を精査し、構造要素の deterministic な抽出可能範囲を確定してから設計を固める。具体的な検討事項:
+- `<TOC>` 要素の有無と品質（全法令に存在するか？）
+- `<ArticleCaption>` の網羅性（見出しがない条文の扱い）
+- `<Part>` / `<Chapter>` / `<Section>` 等の入れ子構造の完全性
+- 枝番号条文（`Num="21_2"` 等）の構造的取り扱い
+
+---
+
+### 高優先（要設計）: `get_law_summary` — 法令全体要約（OPEN）
+
+**解決する問題**: 未知の法令に対する全体的な見取り図の取得
+
+**アーキテクチャ上の特徴**: **ツールの中で LLM を呼ぶ**パターン（inner LLM call）。outer agent loop とは別の system prompt で動作する sub-agent 的な構成。`LlmClient.contentOnly()` が利用可能。
+
+**実現可能なアプローチ**（コンテキストウィンドウ制約への対処）:
+- 法令全文を直接 LLM に送るのは不可（民法 ~150K tokens、8-16K context では破綻）
+- 代替: **構造抽出（deterministic）→ 選択的テキスト → LLM 要約** の2段パイプライン
+  1. `get_law_structure` の出力（TOC + 章タイトル + 条見出し）
+  2. 第1-2条（目的・定義）の本文
+  3. 罰則章の見出し一覧
+  4. 上記を inner LLM call に渡して自然言語要約を生成
+
+**「法令調査に有益な要約」の要件**:
+1. 規律対象と目的（第1条系）
+2. 構造マップ（章・節の構成と各部分の役割）
+3. 定義規定（第2条系のキーターム）
+4. 中核規定の所在
+5. 罰則・制裁の有無と位置
+6. 附則の概要（施行日、経過措置）
+
+**V1/V2 共通機能**: API バージョンに依存しない。`fetchLawData` + XML パース + LLM 呼び出しの構成はどちらのバックエンドでも動作。
+
+**設計ステータス: OPEN** — 以下が未確定:
+- `get_law_structure`（deterministic 部分）の設計が前提。先にそちらを確定する
+- inner LLM call の system prompt 設計（上記6要件をどう指示するか）
+- ローカルモデル（Qwen3.5-9B/35B）での要約品質の検証
+- `get_law_structure` 単体で十分な場合、LLM 要約は不要かもしれない（実運用で判断）
+
+**実装順序**: `search_within_law` → `get_law_structure` → `get_law_summary`（各ステップで前段の成果を確認してから進む）
+
 ---
 
 ### 中優先: `find_laws` のカテゴリ拡張

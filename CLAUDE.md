@@ -174,9 +174,14 @@ Stage 0-3 の scala-cli スクリプトは `stages/stage0-3/` にそのまま残
   - T5: `get_law_structure`（TOC 抽出 + MainProvision フォールバック）
 - **ツールルーティング観察**: LLM が構造質問でツールを自発的に使わない → SP チューニング必要
 
+- **T6: get_definitions + ナッジタグシステム**: 実装完了 + TagHandling SP
+- **ツールルーティング修正**: description に「法令名を直接指定可能（find_laws は不要）」追加 → find_laws 偏重解消
+- **ProvenanceControl (Light)**: 不存在断言の根拠明示制約。3バリアント切り替え可能
+- **SP Provenance 実験**: 4強度 × 3法令（消費者基本法/刑法/軽犯罪法）で検証
+
 ### 次のアクション（優先順）
-1. **T6: get_definitions + ナッジタグシステム**: deterministic 部分は Plan で設計、SP は curl 試行錯誤
-2. **SP チューニング**: ツール使い分けガイド + ナッジ遵守指示（T6 と同時に）
+1. **SearchHit の出典区分追加**: XML 親パス保持で本則/附則を区別。民法テストで発見された混同問題
+2. **ProvenanceControl 強化検討**: 構造確認だけで「なし」と断言するパスを塞ぐか
 3. **T7**: Thinking tail ストリーミング表示
 4. `egov-law-client-design.md` を新アーキテクチャに更新
 
